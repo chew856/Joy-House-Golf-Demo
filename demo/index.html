@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Joy House Golf — Book a Bay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,400;0,500;0,700;1,500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+<script src="https://js.stripe.com/v3/"></script>
+<style>
+  :root {
+    --black: #000000;
+    --near-black: #0E0E0E;
+    --surface: #181818;
+    --surface-2: #222222;
+    --border: #333333;
+    --white: #FFFFFF;
+    --muted: #B5B5B5;
+    --dim: #7A7A7A;
+    --green: #F0523D;      /* brand orange accent (var name kept for simplicity) */
+    --green-dim: #c7402e;
+    --red: #F0523D;
+    --danger: #ff5b5b;     /* error red, distinct from the orange accent */
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(1200px 600px at 70% -10%, #1a1a1a 0%, var(--black) 55%) , var(--black);
+    color: var(--white);
+    font-family: 'Raleway', system-ui, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, .display { font-family: 'Space Grotesk', sans-serif; letter-spacing: -0.01em; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 20;
+  }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 76px; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand img { height: 46px; width: auto; display: block; }
+  .brand-fallback { font-family: 'Space Grotesk'; font-weight: 700; font-size: 22px; }
+  .brand-fallback .joy { color: var(--white); }
+  .brand-fallback .hg { color: var(--green); }
+  .nav-cta { font-size: 13px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+
+  /* Hero / progress */
+  .hero { padding: 34px 0 4px; }
+  .eyebrow { color: var(--green); font-weight: 700; font-size: 12px; letter-spacing: .18em; text-transform: uppercase; }
+  .hero h1 { font-size: 32px; margin: 10px 0 6px; }
+  .hero p { color: var(--muted); max-width: 580px; font-size: 15px; }
+
+  .steps { display: flex; gap: 8px; margin: 22px 0 4px; flex-wrap: wrap; align-items: center; }
+  .step { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+  .step .dot { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--border);
+    display: grid; place-items: center; font-size: 12px; font-weight: 700; color: var(--dim); }
+  .step.active { color: var(--white); }
+  .step.active .dot { background: var(--green); color: #000; border-color: var(--green); }
+  .step.done .dot { background: var(--surface-2); color: var(--green); border-color: var(--green); }
+  .step .sep { color: var(--border); margin: 0 4px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; }
+  .panel + .panel { margin-top: 18px; }
+  .panel-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+  .panel h2 { font-size: 18px; margin-bottom: 4px; }
+  .panel .sub { color: var(--dim); font-size: 13px; }
+  .stack { padding: 22px 0 150px; }
+
+  /* Date: split layout — calendar + day summary */
+  .date-layout { display: grid; grid-template-columns: 7fr 5fr; gap: 44px; align-items: stretch;
+    transition: grid-template-columns .5s cubic-bezier(.4,0,.2,1), gap .5s cubic-bezier(.4,0,.2,1); }
+  @media (max-width: 720px){ .date-layout, .date-layout.full { grid-template-columns: 1fr; gap: 24px; } }
+  /* Before a date is picked, the calendar fills the whole panel; selecting one slides it left */
+  .date-layout.full { grid-template-columns: 1fr 0fr; gap: 0; }
+  .date-layout.full .day-summary { opacity: 0; }
+  .date-layout.full .cal-grid { gap: 10px; }
+  .date-layout.full .cal-day { height: 66px; font-size: 17px; }
+
+  .cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .cal-title { font-family: 'Space Grotesk'; font-weight: 700; font-size: 20px; }
+  .cal-nav { display: flex; gap: 8px; }
+  .cal-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--near-black);
+    color: var(--white); cursor: pointer; font-size: 18px; display: grid; place-items: center; transition: .15s; }
+  .cal-btn:hover:not(:disabled) { border-color: var(--green); color: var(--green); }
+  .cal-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .cal-dow { font-size: 11px; color: var(--dim); text-align: center; padding-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .cal-day { height: 54px; display: grid; place-items: center; border-radius: 11px; border: 1px solid var(--border);
+    background: var(--near-black); cursor: pointer; font-family: 'Space Grotesk'; font-weight: 700; font-size: 15px;
+    transition: border-color .12s, box-shadow .12s, background .12s, color .12s, height .45s cubic-bezier(.4,0,.2,1), font-size .45s; }
+  .cal-day.empty { background: transparent; border: none; cursor: default; }
+  .cal-day.past { opacity: .25; cursor: not-allowed; }
+  .cal-day.today:not(.sel) { border-color: var(--dim); color: var(--green); }
+  .cal-day.sel { background: var(--green); border-color: var(--green); color: #000; }
+  .cal-day:hover:not(.sel):not(.past):not(.empty) { border-color: var(--green); }
+
+  .day-summary { border-left: 1px solid var(--border); padding-left: 44px; display: flex; flex-direction: column; justify-content: center;
+    min-width: 0; overflow: hidden; opacity: 1; transition: opacity .4s ease .18s; }
+  @media (max-width: 720px){ .day-summary { border-left: none; padding-left: 0; padding-top: 6px; } }
+  .day-summary .picked { font-family: 'Space Grotesk'; font-weight: 700; font-size: 30px; margin-bottom: 6px; }
+  .day-summary .picked.placeholder { color: var(--dim); font-size: 20px; }
+  .day-summary .open { color: var(--green); font-size: 16px; font-weight: 600; }
+  .hours-list { margin-top: 26px; display: grid; gap: 11px; }
+  .hours-list .hr-row { display: flex; justify-content: space-between; font-size: 14.5px; color: var(--muted); max-width: 360px;
+    padding-bottom: 11px; border-bottom: 1px solid var(--border); }
+  .hours-list .hr-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .hours-list .hr-row.cur { color: var(--white); }
+  .hours-list .hr-row.cur span:first-child { color: var(--green); }
+  .hours-list .hr-row .d { color: var(--dim); }
+
+  /* Availability grid */
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--dim); align-items: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 12px; height: 12px; border-radius: 4px; border: 1px solid var(--border); display: inline-block; }
+  .swatch.avail { background: var(--near-black); border-color: var(--green-dim); }
+  .swatch.buf { background: repeating-linear-gradient(45deg,#1c1c1c,#1c1c1c 3px,#0e0e0e 3px,#0e0e0e 6px); border-color: var(--border); }
+  .swatch.bk { background: rgba(229,57,53,.16); border-color: #E53935; border-style: dashed; }
+
+  .grid-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+  .grid { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 6px; }
+  .grid th { font-family: 'Space Grotesk'; font-weight: 700; font-size: 13.5px; text-align: center; padding: 4px 6px 10px;
+    color: var(--white); vertical-align: bottom; }
+  .grid th .bmeta { display: block; font-family: 'Raleway'; font-weight: 500; font-size: 11px; color: var(--dim); margin-top: 3px; letter-spacing: .02em; }
+  .grid th.timehead { width: 70px; }
+  .grid td.time { font-family: 'Space Grotesk'; font-weight: 700; font-size: 12.5px; color: var(--muted); text-align: right;
+    padding-right: 10px; white-space: nowrap; width: 70px; }
+  .cell {
+    text-align: center; padding: 11px 4px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--near-black); cursor: pointer; transition: .12s; user-select: none; line-height: 1.15;
+  }
+  .cell .price { font-family: 'Space Grotesk'; font-weight: 700; font-size: 14px; }
+  .cell .per { font-size: 10px; color: var(--dim); }
+  .cell:not(.booked):hover { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+  .cell:not(.booked):hover .per { color: var(--muted); }
+  .cell.booked { color: #e0796f; background: rgba(229,57,53,.10); cursor: not-allowed; border-style: dashed; border-color: rgba(229,57,53,.5); }
+  .cell.booked .price { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .cell.booked .per { display: none; }
+  .cell.buffer { color: var(--dim); cursor: not-allowed; border-color: var(--border);
+    background: repeating-linear-gradient(45deg,#161616,#161616 6px,#0e0e0e 6px,#0e0e0e 12px); }
+  .cell.buffer .price { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .cell.buffer .per { display: none; }
+  .cell.sel { background: var(--green); border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+  .cell.sel .price, .cell.sel .per { color: #000; }
+  .closed-note { color: var(--dim); padding: 30px 0; text-align: center; font-size: 14px; }
+
+  /* Sticky checkout bar */
+  .checkbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: rgba(14,14,14,.95); backdrop-filter: blur(12px); border-top: 1px solid var(--border);
+    transform: translateY(115%); transition: transform .25s ease; }
+  .checkbar.show { transform: translateY(0); }
+  .checkbar .inner { max-width: 1180px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .cb-info { display: flex; gap: 22px; flex-wrap: wrap; align-items: center; flex: 1; min-width: 240px; }
+  .cb-item .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 5px; }
+  .cb-item .v { font-family: 'Space Grotesk'; font-weight: 700; font-size: 15px; }
+  .cb-item .v small { font-family: 'Raleway'; font-weight: 500; font-size: 12px; color: var(--muted); }
+  .cb-total .v { font-size: 22px; }
+  .cb-select { background: var(--near-black); border: 1px solid var(--border); border-radius: 9px; color: var(--white);
+    font-family: inherit; font-size: 14px; font-weight: 600; padding: 8px 10px; cursor: pointer; }
+  .cb-select:focus { outline: none; border-color: var(--green); }
+  .cb-actions { display: flex; gap: 10px; align-items: center; }
+
+  .btn { border: none; border-radius: 11px; padding: 14px 22px; font-weight: 700; font-size: 15px;
+    font-family: 'Space Grotesk'; cursor: pointer; transition: .15s; }
+  .btn-primary { background: var(--green); color: #000; }
+  .btn-primary:hover { background: #ff6450; }
+  .btn-primary:disabled { background: #2a2a2a; color: #666; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--white); border-color: var(--dim); }
+  .btn-block { width: 100%; }
+  .note { font-size: 11.5px; color: var(--dim); text-align: center; margin-top: 12px; line-height: 1.5; }
+  /* Readable test-card hint */
+  #pay-note { font-size: 13.5px; color: var(--muted); background: var(--near-black); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 14px; margin-top: 16px; line-height: 1.55; }
+  #pay-note b { color: var(--green); font-weight: 700; letter-spacing: .02em; }
+
+  /* Modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.78); backdrop-filter: blur(4px);
+    display: none; place-items: center; z-index: 50; padding: 20px; }
+  .overlay.show { display: grid; }
+  .modal { width: 100%; max-width: 430px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 18px; padding: 26px; max-height: 92vh; overflow-y: auto; position: relative;
+    scrollbar-width: none; }
+  .modal::-webkit-scrollbar { width: 0; height: 0; display: none; }
+  .modal-close { position: absolute; top: 18px; right: 18px; width: 34px; height: 34px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--near-black); color: var(--muted); font-size: 15px;
+    cursor: pointer; display: grid; place-items: center; transition: .15s; z-index: 3; }
+  .modal-close:hover { color: var(--white); border-color: var(--dim); }
+  /* Wide, two-column modal for the Stripe step — fills the screen, no long scroll */
+  .modal.pay.stripe { max-width: min(1040px, 94vw); }
+  .pay-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; align-items: start; }
+  .pay-cols .col-pay { display: flex; flex-direction: column; }
+  @media (max-width: 760px){ .pay-cols { grid-template-columns: 1fr; gap: 0; } }
+  .modal h3 { font-size: 20px; margin-bottom: 4px; }
+  .modal .sub { color: var(--dim); font-size: 13px; margin-bottom: 18px; }
+  .mini-recap { background: var(--near-black); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 18px; }
+  .mini-recap .row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .mini-recap .row .k { color: var(--muted); }
+  .mini-recap .row .v { font-weight: 600; }
+  .mini-recap .row.tot { border-top: 1px dashed var(--border); margin-top: 6px; padding-top: 9px; }
+  .mini-recap .row.tot .v { color: var(--green); font-family: 'Space Grotesk'; font-size: 16px; }
+  .input { width: 100%; padding: 13px 14px; background: var(--near-black); border: 1px solid var(--border);
+    border-radius: 10px; color: var(--white); font-family: inherit; font-size: 14px; margin-bottom: 12px; }
+  .input:focus { outline: none; border-color: var(--green); }
+  .stripe-badge { display: flex; align-items: center; gap: 8px; justify-content: center;
+    color: var(--dim); font-size: 12px; margin: 14px 0 18px; }
+  .card-row { display: flex; gap: 12px; }
+  .lock { width: 13px; height: 13px; }
+  #payment-element { min-height: 200px; margin-top: 4px; }
+  .pay-error { color: var(--danger); font-size: 13px; margin-top: 10px; min-height: 1px; }
+  .loading { color: var(--dim); font-size: 14px; text-align: center; padding: 40px 0; }
+
+  /* Confirmation */
+  .check { width: 64px; height: 64px; border-radius: 50%; background: rgba(240,82,61,.12);
+    border: 1px solid var(--green); display: grid; place-items: center; margin: 0 auto 18px; }
+  .check svg { width: 30px; height: 30px; stroke: var(--green); }
+  .conf { text-align: center; }
+  .conf h3 { font-size: 22px; }
+  .conf .code { font-family: 'Space Grotesk'; font-weight: 700; color: var(--green); letter-spacing: .05em; font-size: 18px; margin-top: 4px; }
+  .conf-msg { color: var(--muted); font-size: 14.5px; line-height: 1.55; margin: 14px auto 0; max-width: 340px; }
+  .conf .recap { text-align: left; background: var(--near-black); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px; margin: 20px 0; }
+  .conf .recap .row { display:flex; justify-content: space-between; padding: 7px 0; font-size: 14px; }
+  .conf .recap .row .k { color: var(--muted); }
+
+  .demo-banner { background: var(--surface-2); border-bottom: 1px solid var(--border); color: var(--muted);
+    font-size: 12px; text-align: center; padding: 7px; letter-spacing: .02em; }
+  .demo-banner b { color: var(--green); }
+  footer { border-top: 1px solid var(--border); color: var(--dim); font-size: 12px; padding: 24px 0; text-align: center; }
+
+  @media (max-width: 720px){
+    .hero h1 { font-size: 26px; }
+    .checkbar .inner { gap: 14px; }
+    .btn { padding: 13px 16px; font-size: 14px; }
+    .cb-actions { width: 100%; }
+    .cb-actions .btn { flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-banner">
+  <b>PROTOTYPE</b> — Branded booking demo for Joy House Golf · real bays, hours &amp; rates · Stripe step is simulated (no real charge)
+</div>
+
+<header>
+  <div class="wrap nav">
+    <div class="brand">
+      <img src="https://images.squarespace-cdn.com/content/v1/66fb54c58833195056a5c6b1/f64e42aa-7dd9-4434-bade-a6342963fac0/JoyHouse+Golf+logo+dark+background+new+green.png"
+           alt="Joy House Golf"
+           onerror="this.style.display='none';document.getElementById('bf').style.display='block'" />
+      <span id="bf" class="brand-fallback" style="display:none"><span class="joy">JOY</span><span class="hg">HOUSE GOLF</span></span>
+    </div>
+    <div class="nav-cta">Go farther with Joy</div>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <div class="eyebrow">Reserve your bay</div>
+  <h1>Book a Simulator Session</h1>
+  <p>Pick a day, click an open start time on any bay, then set your end time and group size at checkout.</p>
+
+  <div class="steps" id="steps">
+    <div class="step active" data-s="1"><span class="dot">1</span> Pick a slot</div>
+    <span class="sep">›</span>
+    <div class="step" data-s="2"><span class="dot">2</span> Your details</div>
+    <span class="sep">›</span>
+    <div class="step" data-s="3"><span class="dot">3</span> Payment</div>
+    <span class="sep">›</span>
+    <div class="step" data-s="4"><span class="dot">4</span> Confirmed</div>
+  </div>
+</div>
+
+<div class="wrap stack">
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Choose a date</h2>
+        <div class="sub">Open daily — hours vary by weekday</div>
+      </div>
+    </div>
+    <div class="date-layout">
+      <div>
+        <div class="cal-head">
+          <div class="cal-title" id="cal-title"></div>
+          <div class="cal-nav">
+            <button class="cal-btn" id="cal-prev" aria-label="Previous month">‹</button>
+            <button class="cal-btn" id="cal-next" aria-label="Next month">›</button>
+          </div>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+      <div class="day-summary" id="day-summary"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Available times</h2>
+        <div class="sub">Tap an open start time. Each column is a bay; price shown is per hour.</div>
+      </div>
+      <div class="legend">
+        <span><i class="swatch avail"></i> Available</span>
+        <span><i class="swatch bk"></i> Booked</span>
+      </div>
+    </div>
+    <div class="grid-scroll">
+      <div id="grid-host"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STICKY CHECKOUT BAR -->
+<div class="checkbar" id="checkbar">
+  <div class="inner">
+    <div class="cb-info" id="cb-info"></div>
+    <div class="cb-actions">
+      <button class="btn btn-ghost" id="cb-clear">Clear</button>
+      <button class="btn btn-primary" id="cb-continue">Continue to payment</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="overlay" id="pay-overlay">
+  <div class="modal pay" id="pay-modal">
+    <button class="modal-close" id="pay-close" aria-label="Close checkout">✕</button>
+    <h3>Secure checkout</h3>
+    <div class="sub">Complete payment to confirm your bay.</div>
+
+    <div class="mini-recap" id="pay-recap"></div>
+
+    <!-- Real Stripe (Payment Element, dark theme) — used when the server is running with keys -->
+    <div id="stripe-mode" style="display:none">
+      <div class="pay-cols">
+        <div>
+          <input class="input" id="sc-name" placeholder="Full name" />
+          <input class="input" id="sc-email" placeholder="Email" type="email" />
+          <input class="input" id="sc-phone" placeholder="Phone" type="tel" style="margin-bottom:0" />
+        </div>
+        <div class="col-pay">
+          <div id="payment-element"><div class="loading">Loading secure checkout…</div></div>
+          <div class="pay-error" id="pay-error"></div>
+          <button class="btn btn-primary btn-block" id="sc-pay" style="margin-top:14px" disabled>Pay <span id="sc-amt"></span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Simulated fallback — used when the page is opened as a plain file (no backend) -->
+    <div id="sim-mode" style="display:none">
+      <input class="input" id="cust-name" placeholder="Full name" />
+      <input class="input" id="cust-email" placeholder="Email" type="email" />
+      <input class="input" id="cust-phone" placeholder="Phone" type="tel" />
+
+      <div class="stripe-badge">
+        <svg class="lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Payments by <b style="color:#fff;margin-left:2px">Stripe</b> · simulated
+      </div>
+
+      <input class="input" placeholder="Card number  (4242 4242 4242 4242)" value="4242 4242 4242 4242" />
+      <div class="card-row">
+        <input class="input" placeholder="MM / YY" value="12 / 34" />
+        <input class="input" placeholder="CVC" value="123" />
+      </div>
+
+      <button class="btn btn-primary btn-block" id="pay-btn" style="margin-top:6px">Pay <span id="pay-amt"></span></button>
+    </div>
+
+    <button class="btn btn-ghost btn-block" id="pay-cancel" style="margin-top:10px">Back</button>
+    <div class="note" id="pay-note"></div>
+  </div>
+</div>
+
+<!-- CONFIRMATION MODAL -->
+<div class="overlay" id="conf-overlay">
+  <div class="modal conf">
+    <div class="check"><svg viewBox="0 0 24 24" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></div>
+    <h3>Booking confirmed</h3>
+    <div class="code" id="conf-code"></div>
+    <div class="conf-msg" id="conf-msg"></div>
+    <div class="recap" id="conf-recap"></div>
+    <button class="btn btn-primary btn-block" id="conf-done">Done</button>
+  </div>
+</div>
+
+<footer>
+  Joy House Golf · Booking prototype · Built by Voltris AI
+</footer>
+
+<script>
+/* ---------- Real configuration (from joyhousegolf.com) ---------- */
+const CONFIG = {
+  bays: [
+    { id: 'B1', name: 'The Tee Time Tavern Bay', sim: 'Uneekor' },
+    { id: 'B2', name: 'The Bunker Bistro Bay',    sim: 'Uneekor' },
+    { id: 'B3', name: 'The Bogey Barn Bay',       sim: 'Uneekor' },
+    { id: 'B4', name: 'The Mulligan Manor Bay',   sim: 'TrackMan' },
+    { id: 'B5', name: 'The Sunset Sipper Bay',    sim: 'TrackMan' },
+  ],
+  // Opening hours by weekday (0 = Sun … 6 = Sat). [openHour, closeHour] in 24h.
+  hours: {
+    0: [9, 20],   // Sunday    9 AM – 8 PM
+    1: [15, 23],  // Monday    3 PM – 11 PM
+    2: [11, 23],  // Tuesday   11 AM – 11 PM
+    3: [11, 23],  // Wednesday
+    4: [11, 23],  // Thursday
+    5: [11, 23],  // Friday
+    6: [9, 23],   // Saturday  9 AM – 11 PM
+  },
+  maxParty: 4,                 // up to 4 players per bay
+  peakStartHour: 17,           // 5 PM
+  slotStep: 30,                // 30-minute increments
+  minMins: 30,                 // minimum 30-minute session
+};
+
+/* Per-hour rate: weekend (Sat/Sun) is pricier; everything jumps after 5 PM. */
+function rateFor(date, hour){
+  const weekend = [0,6].includes(date.getDay());
+  const peak = hour >= CONFIG.peakStartHour;
+  if (weekend) return peak ? 36 : 30;
+  return peak ? 32 : 25;
+}
+
+/* ---------- State ---------- */
+const state = { date: null, bay: null, startMin: null, endMin: null, party: 1, calMonth: null };
+
+/* ---------- Helpers ---------- */
+const $ = s => document.querySelector(s);
+const money = n => '$' + (Number.isInteger(n) ? n : n.toFixed(2));
+const pad = n => String(n).padStart(2,'0');
+const fmtMin = m => { let h = Math.floor(m/60), mm = m%60; const ap = h<12?'AM':'PM'; let hh = h%12; if(hh===0) hh=12; return hh + (mm? ':'+pad(mm):'') + ' ' + ap; };
+const fmtFull = m => { let h = Math.floor(m/60), mm = m%60; const ap = h<12?'AM':'PM'; let hh = h%12; if(hh===0) hh=12; return hh + ':' + pad(mm) + ' ' + ap; };
+const fmtDur = mins => { const h=Math.floor(mins/60), mm=mins%60; return [h?h+' hr':'', mm?mm+' min':''].filter(Boolean).join(' '); };
+const dayHours = date => CONFIG.hours[date.getDay()];
+const DOW_FULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MON_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const monthStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
+function fmtHours([o,c]){ return fmtMin(o*60)+' – '+fmtMin(c*60); }
+
+// deterministic pseudo-random so "booked" half-hour blocks stay stable per day/bay
+function bookedSub(dateKey, bayId, minute){
+  let h = 0; const s = dateKey+bayId+minute;
+  for (let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return (h % 100) < 20; // ~20% of half-hour blocks pre-booked
+}
+
+// first booked half-hour at or after `from`, else the day's close
+function firstBlock(date, bayId, from){
+  const [, close] = dayHours(date);
+  const dateKey = date.toDateString();
+  let m = from;
+  while (m < close*60 && !bookedSub(dateKey, bayId, m)) m += CONFIG.slotStep;
+  return m; // a booked slot's start, or close
+}
+
+// valid end times: every free slot up to (and ending exactly at) the next booking is usable
+function endOptions(date, bayId, startMin){
+  const next = firstBlock(date, bayId, startMin);   // first booked slot, or close
+  const opts = [];
+  for (let e = startMin + CONFIG.slotStep; e <= next; e += CONFIG.slotStep) opts.push(e);
+  return opts;
+}
+
+// a start time is bookable only if its own slot is free AND a valid end exists
+function startBookable(date, bayId, startMin){
+  if (bookedSub(date.toDateString(), bayId, startMin)) return false;
+  return endOptions(date, bayId, startMin).length > 0;
+}
+
+// price prorated per half hour so sessions crossing 5 PM bill correctly
+function priceRange(date, startMin, endMin){
+  let total = 0;
+  for (let m = startMin; m < endMin; m += CONFIG.slotStep){
+    total += rateFor(date, Math.floor(m/60)) / (60/CONFIG.slotStep);
+  }
+  return total;
+}
+
+/* ---------- Calendar ---------- */
+function buildCalendar(){
+  const grid = $('#cal-grid'); grid.innerHTML='';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const view = state.calMonth;
+  $('#cal-title').textContent = MON_FULL[view.getMonth()] + ' ' + view.getFullYear();
+
+  // prev disabled when viewing current month
+  $('#cal-prev').disabled = (view.getFullYear()===today.getFullYear() && view.getMonth()===today.getMonth());
+
+  ['S','M','T','W','T','F','S'].forEach(d=>{
+    const el=document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el);
+  });
+
+  const firstDow = new Date(view.getFullYear(), view.getMonth(), 1).getDay();
+  const days = new Date(view.getFullYear(), view.getMonth()+1, 0).getDate();
+  for(let i=0;i<firstDow;i++){ const e=document.createElement('div'); e.className='cal-day empty'; grid.appendChild(e); }
+
+  for(let d=1; d<=days; d++){
+    const date = new Date(view.getFullYear(), view.getMonth(), d);
+    const el = document.createElement('div'); el.className='cal-day'; el.textContent=d;
+    const isPast = date < today;
+    const isToday = date.getTime()===today.getTime();
+    const isSel = state.date && date.toDateString()===state.date.toDateString();
+    if(isPast) el.classList.add('past');
+    if(isToday) el.classList.add('today');
+    if(isSel) el.classList.add('sel');
+    if(!isPast) el.onclick=()=>{ state.date=date; clearSelection(); renderAll(); };
+    grid.appendChild(el);
+  }
+}
+
+function renderDaySummary(){
+  const el = $('#day-summary');
+  if(!state.date){
+    el.innerHTML = `<div class="picked placeholder">Select a date to see times</div>`;
+    return;
+  }
+  const d = state.date;
+  const label = DOW_FULL[d.getDay()] + ', ' + MON_FULL[d.getMonth()] + ' ' + d.getDate();
+  const hrs = [
+    ['Mon', CONFIG.hours[1]], ['Tue–Fri', CONFIG.hours[2]],
+    ['Sat', CONFIG.hours[6]], ['Sun', CONFIG.hours[0]],
+  ];
+  const curKey = (()=>{ const w=d.getDay(); if(w===1) return 'Mon'; if(w>=2&&w<=5) return 'Tue–Fri'; if(w===6) return 'Sat'; return 'Sun'; })();
+  el.innerHTML = `
+    <div class="picked">${label}</div>
+    <div class="open">Open ${fmtHours(dayHours(d))}</div>
+    <div class="hours-list">
+      ${hrs.map(([k,v])=>`<div class="hr-row ${k===curKey?'cur':''}"><span class="d">${k}</span><span>${fmtHours(v)}</span></div>`).join('')}
+    </div>`;
+}
+
+/* ---------- Availability grid ---------- */
+function buildGrid(){
+  const host=$('#grid-host');
+  if(!state.date){ host.innerHTML='<div class="closed-note">Select a date above to see availability.</div>'; return; }
+  const [open, close]=dayHours(state.date);
+  const dateKey=state.date.toDateString();
+
+  let html='<table class="grid"><thead><tr><th class="timehead"></th>';
+  CONFIG.bays.forEach(b=>{ html+=`<th>${b.name}<span class="bmeta">${b.sim}</span></th>`; });
+  html+='</tr></thead><tbody>';
+
+  // rows: every 30 min from open up to the last start that still fits a 1-hour minimum
+  for(let m=open*60; m + CONFIG.minMins <= close*60; m += CONFIG.slotStep){
+    html+=`<tr><td class="time">${fmtFull(m)}</td>`;
+    CONFIG.bays.forEach(b=>{
+      const realBooked = bookedSub(dateKey, b.id, m);
+      const ok = !realBooked && endOptions(state.date, b.id, m).length>0;   // bookable start
+      const sel = state.bay===b.id && state.startMin===m;
+      if(ok){
+        const rate=rateFor(state.date, Math.floor(m/60));
+        html+=`<td class="cell${sel?' sel':''}" data-bay="${b.id}" data-min="${m}">`
+            + `<span class="price">$${rate}</span><span class="per">/hr</span></td>`;
+      } else {
+        html+=`<td class="cell booked"><span class="price">Booked</span></td>`;
+      }
+    });
+    html+='</tr>';
+  }
+  html+='</tbody></table>';
+  host.innerHTML=html;
+
+  host.querySelectorAll('.cell[data-bay]').forEach(c=>{
+    c.onclick=()=>{
+      state.bay=c.dataset.bay; state.startMin=+c.dataset.min;
+      const opts=endOptions(state.date, state.bay, state.startMin);
+      const target=state.startMin+60;                                    // prefer a 1-hour default
+      state.endMin = opts.reduce((a,b)=>Math.abs(b-target)<Math.abs(a-target)?b:a, opts[0]);
+      renderAll();
+    };
+  });
+}
+
+/* ---------- Checkout bar ---------- */
+function selectionValid(){ return state.date && state.bay && state.startMin!=null && state.endMin!=null; }
+function clearSelection(){ state.bay=null; state.startMin=null; state.endMin=null; }
+
+function renderCheckbar(){
+  const bar=$('#checkbar');
+  if(!selectionValid()){ bar.classList.remove('show'); return; }
+  const bay=CONFIG.bays.find(b=>b.id===state.bay);
+  const dateStr=state.date.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+  const opts=endOptions(state.date, state.bay, state.startMin);
+  const price=priceRange(state.date, state.startMin, state.endMin);
+
+  const endSel = `<select class="cb-select" id="cb-end">` +
+    opts.map(e=>`<option value="${e}" ${e===state.endMin?'selected':''}>${fmtFull(e)}</option>`).join('') +
+    `</select>`;
+  const partySel = `<select class="cb-select" id="cb-party">` +
+    Array.from({length:CONFIG.maxParty},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===state.party?'selected':''}>${n} ${n>1?'players':'player'}</option>`).join('') +
+    `</select>`;
+
+  $('#cb-info').innerHTML=`
+    <div class="cb-item"><div class="k">Bay</div><div class="v">${bay.name}<br><small>${bay.sim} · ${dateStr}</small></div></div>
+    <div class="cb-item"><div class="k">Start</div><div class="v">${fmtFull(state.startMin)}</div></div>
+    <div class="cb-item"><div class="k">End time</div>${endSel}</div>
+    <div class="cb-item"><div class="k">Group size</div>${partySel}</div>
+    <div class="cb-item cb-total"><div class="k">Total</div><div class="v">${money(price)}</div></div>`;
+  bar.classList.add('show');
+  if(typeof prefetchPI==='function') prefetchPI();
+
+  $('#cb-end').onchange=e=>{ state.endMin=+e.target.value; renderCheckbar(); };
+  $('#cb-party').onchange=e=>{ state.party=+e.target.value; };
+}
+
+/* ---------- Steps ---------- */
+function setStep(n){
+  document.querySelectorAll('.step').forEach(s=>{
+    const sn=+s.dataset.s; s.classList.remove('active','done');
+    if(sn<n) s.classList.add('done'); else if(sn===n) s.classList.add('active');
+  });
+}
+function renderAll(){
+  document.querySelector('.date-layout').classList.toggle('full', !state.date);
+  buildCalendar(); renderDaySummary(); buildGrid(); renderCheckbar(); setStep(selectionValid()?2:1);
+}
+
+/* ---------- Calendar nav ---------- */
+$('#cal-prev').onclick=()=>{ const m=state.calMonth; state.calMonth=new Date(m.getFullYear(), m.getMonth()-1, 1); buildCalendar(); };
+$('#cal-next').onclick=()=>{ const m=state.calMonth; state.calMonth=new Date(m.getFullYear(), m.getMonth()+1, 1); buildCalendar(); };
+
+/* ---------- Checkout bar buttons ---------- */
+$('#cb-clear').onclick=()=>{ clearSelection(); renderAll(); };
+$('#cb-continue').onclick=openPayment;
+
+/* ---------- Payment ---------- */
+function recapHTML(){
+  const bay=CONFIG.bays.find(b=>b.id===state.bay);
+  const price=priceRange(state.date, state.startMin, state.endMin);
+  const durLabel=fmtDur(state.endMin-state.startMin);
+  const dateStr=state.date.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  return `
+    <div class="row"><span class="k">Bay</span><span class="v">${bay.name}</span></div>
+    <div class="row"><span class="k">Date</span><span class="v">${dateStr}</span></div>
+    <div class="row"><span class="k">Time</span><span class="v">${fmtFull(state.startMin)} – ${fmtFull(state.endMin)} · ${durLabel}</span></div>
+    <div class="row"><span class="k">Group</span><span class="v">${state.party} ${state.party>1?'players':'player'}</span></div>
+    <div class="row tot"><span class="k">Total</span><span class="v">${money(price)}</span></div>`;
+}
+/* ---------- Stripe wiring (Payment Element, dark theme) ---------- */
+let STRIPE=null, stripeReady=false, elements=null, paying=false;
+const isoDate = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+
+async function loadStripeConfig(){
+  try{
+    const r=await fetch('/api/config');
+    if(!r.ok) throw 0;
+    const cfg=await r.json();
+    if(cfg.stripeEnabled && cfg.publishableKey && window.Stripe){
+      STRIPE=window.Stripe(cfg.publishableKey);
+      stripeReady=true;
+    }
+  }catch(e){ stripeReady=false; }
+}
+
+const STRIPE_APPEARANCE = {
+  theme:'night',
+  variables:{
+    colorPrimary:'#FFFFFF', colorBackground:'#0E0E0E', colorText:'#FFFFFF',
+    colorTextSecondary:'#B5B5B5', colorDanger:'#ff5b5b', colorSuccess:'#FFFFFF',
+    fontFamily:"Raleway, system-ui, sans-serif", borderRadius:'10px', spacingUnit:'4px',
+  },
+  rules:{
+    '.Input':{ backgroundColor:'#0E0E0E', border:'1px solid #333333' },
+    '.Input:focus':{ border:'1px solid #F0523D', boxShadow:'0 0 0 1px #F0523D' },
+    '.Tab, .Block':{ backgroundColor:'#0E0E0E', border:'1px solid #333333' },
+    '.Tab:hover':{ borderColor:'#F0523D' },
+    '.Tab--selected':{ backgroundColor:'#0E0E0E', borderColor:'#F0523D', boxShadow:'0 0 0 1px #F0523D' },
+    '.TabLabel--selected':{ color:'#FFFFFF' },
+    '.TabIcon--selected':{ color:'#F0523D' },
+    '.Label':{ color:'#B5B5B5' },
+  },
+};
+
+/* Prefetch the PaymentIntent as soon as a slot is chosen, so checkout opens instantly. */
+let piCache=null, prefetchTimer=null;
+const bookingKey = () => [isoDate(state.date), state.bay, state.startMin, state.endMin].join('|');
+
+async function createPI(){
+  const key=bookingKey();
+  const body={ dateISO:isoDate(state.date), bayId:state.bay, startMin:state.startMin, endMin:state.endMin, party:state.party };
+  const r=await fetch('/api/create-payment-intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await r.json();
+  if(!r.ok) throw new Error(data.error||'error');
+  piCache={ key, clientSecret:data.clientSecret, amount:data.amount };
+  return piCache;
+}
+function prefetchPI(){
+  if(!stripeReady || !selectionValid()) return;
+  if(piCache && piCache.key===bookingKey()) return;
+  clearTimeout(prefetchTimer);
+  prefetchTimer=setTimeout(()=>{ createPI().catch(()=>{}); }, 300);
+}
+
+async function mountStripe(){
+  const peEl=$('#payment-element');
+  peEl.innerHTML='<div class="loading">Loading secure checkout…</div>';
+  $('#sc-pay').disabled=true; $('#pay-error').textContent='';
+  let data;
+  try{
+    data=(piCache && piCache.key===bookingKey()) ? piCache : await createPI();
+  }catch(err){ peEl.innerHTML='<div class="loading">Could not start checkout: '+err.message+'</div>'; return; }
+  $('#sc-amt').textContent=money(data.amount/100);
+  elements=STRIPE.elements({ clientSecret:data.clientSecret, appearance:STRIPE_APPEARANCE });
+  peEl.innerHTML='';
+  const pe=elements.create('payment', { layout:'tabs' });
+  pe.mount('#payment-element');
+  pe.on('ready', ()=>{ $('#sc-pay').disabled=false; });
+}
+
+async function openPayment(){
+  $('#pay-recap').innerHTML=recapHTML();
+  $('#pay-overlay').classList.add('show');
+  setStep(3);
+  const modal=$('#pay-modal');
+  if(stripeReady){
+    modal.classList.add('stripe');
+    $('#stripe-mode').style.display='block';
+    $('#sim-mode').style.display='none';
+    $('#pay-note').innerHTML='<b>Test mode.</b> Pay with card <b>4242&nbsp;4242&nbsp;4242&nbsp;4242</b> — any future expiry date, any 3-digit CVC, any postal code.';
+    await mountStripe();
+  }else{
+    modal.classList.remove('stripe');
+    $('#stripe-mode').style.display='none';
+    $('#sim-mode').style.display='block';
+    $('#pay-amt').textContent=money(priceRange(state.date, state.startMin, state.endMin));
+    $('#pay-note').textContent='Simulated checkout — run the local server with your Stripe keys to take real (test) payments.';
+  }
+}
+
+function closePayment(){
+  elements=null;
+  $('#pay-overlay').classList.remove('show');
+  setStep(2);
+}
+$('#pay-cancel').onclick=closePayment;
+$('#pay-close').onclick=closePayment;
+$('#pay-overlay').addEventListener('click', e=>{ if(e.target===$('#pay-overlay')) closePayment(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && $('#pay-overlay').classList.contains('show')) closePayment(); });
+
+/* Simulated fallback Pay button */
+$('#pay-btn').onclick=()=>{
+  const name=$('#cust-name').value.trim()||'Guest';
+  $('#pay-overlay').classList.remove('show');
+  showConfirmation(name);
+};
+
+/* Real Stripe Pay button */
+$('#sc-pay').onclick=async ()=>{
+  if(paying || !elements) return;
+  paying=true;
+  const btn=$('#sc-pay'); const label=btn.innerHTML;
+  btn.disabled=true; btn.textContent='Processing…'; $('#pay-error').textContent='';
+  const { error, paymentIntent } = await STRIPE.confirmPayment({
+    elements,
+    redirect:'if_required',
+    confirmParams:{
+      return_url: location.origin + '/',
+      payment_method_data:{ billing_details:{
+        name:$('#sc-name').value||undefined, email:$('#sc-email').value||undefined, phone:$('#sc-phone').value||undefined,
+      } },
+      receipt_email: $('#sc-email').value || undefined,
+    },
+  });
+  paying=false;
+  if(error){ $('#pay-error').textContent=error.message||'Payment could not be completed.'; btn.innerHTML=label; btn.disabled=false; return; }
+  if(paymentIntent && paymentIntent.status==='succeeded'){
+    $('#pay-overlay').classList.remove('show');
+    showConfirmation($('#sc-name').value.trim()||'Guest');
+  }else{ btn.innerHTML=label; btn.disabled=false; }
+};
+
+/* Return from a redirect-based payment method (test cards don't redirect). */
+async function handleReturn(){
+  const cs=new URLSearchParams(location.search).get('payment_intent_client_secret');
+  if(!cs || !STRIPE) return;
+  try{
+    const { paymentIntent }=await STRIPE.retrievePaymentIntent(cs);
+    if(paymentIntent && paymentIntent.status==='succeeded') showStripeConfirmation(paymentIntent);
+  }catch(e){}
+  history.replaceState({}, '', location.pathname);
+}
+
+function showStripeConfirmation(pi){
+  const code='JH-'+Math.abs([...pi.id].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7)).toString(36).slice(0,6).toUpperCase();
+  piCache=null;
+  $('#conf-code').textContent=code;
+  $('#conf-msg').textContent="You're all set! Your bay is reserved — we'll see you at the Joy House.";
+  $('#conf-recap').innerHTML=`
+    <div class="row"><span class="k">Bay</span><span>${pi.metadata?.bayName||''}</span></div>
+    <div class="row"><span class="k">When</span><span>${pi.metadata?.summary||''}</span></div>
+    <div class="row"><span class="k">Paid</span><span>${money(pi.amount/100)}</span></div>`;
+  $('#conf-overlay').classList.add('show');
+  setStep(4);
+}
+
+function showConfirmation(name){
+  const bay=CONFIG.bays.find(b=>b.id===state.bay);
+  const price=priceRange(state.date, state.startMin, state.endMin);
+  const dateStr=state.date.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  const code='JH-'+Math.abs([...(name+dateStr+state.startMin+bay.id)].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7)).toString(36).slice(0,6).toUpperCase();
+  piCache=null;
+  $('#conf-code').textContent=code;
+  $('#conf-msg').textContent=`You're all set${name && name!=='Guest' ? ', '+name : ''}! Your bay is reserved — we'll see you at the Joy House.`;
+  $('#conf-recap').innerHTML=`
+    <div class="row"><span class="k">Name</span><span>${name}</span></div>
+    <div class="row"><span class="k">Bay</span><span>${bay.name}</span></div>
+    <div class="row"><span class="k">Date</span><span>${dateStr}</span></div>
+    <div class="row"><span class="k">Time</span><span>${fmtFull(state.startMin)} – ${fmtFull(state.endMin)}</span></div>
+    <div class="row"><span class="k">Group</span><span>${state.party} ${state.party>1?'players':'player'}</span></div>
+    <div class="row"><span class="k">Paid</span><span>${money(price)}</span></div>`;
+  $('#conf-overlay').classList.add('show');
+  setStep(4);
+}
+$('#conf-done').onclick=()=>{
+  window.location.href='https://www.joyhousegolf.com';
+};
+
+/* ---------- Init ---------- */
+state.calMonth = monthStart(new Date());
+renderAll();
+loadStripeConfig().then(handleReturn);
+</script>
+</body>
+</html>
