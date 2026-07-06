@@ -335,7 +335,8 @@
   .wk-band .input{max-width:160px}
   .wk-band .wk-b-from,.wk-band .wk-b-to{max-width:120px}
   .wk-dash{color:var(--dim)}
-  /* Paint palette above the tee sheet */
+  /* Paint palette above the tee sheet (hidden until “Paint status” is pressed) */
+  #paint-toggle.on{border-color:var(--orange);color:#fff;background:rgba(240,82,61,.16)}
   .paint-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px}
   .paint-lead{font-family:'Space Grotesk';font-weight:700;font-size:12px;color:var(--muted);margin-right:2px}
   .paint-sw{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--border);
@@ -479,6 +480,7 @@
             <input class="input" id="bk-date" type="date" />
             <button class="btn btn-ghost btn-sm" id="day-next" title="Next">›</button>
             <button class="btn btn-ghost btn-sm" id="day-today">Today</button>
+            <button class="btn btn-ghost btn-sm" id="paint-toggle">Paint status</button>
           </div>
         </div>
 
@@ -497,12 +499,12 @@
 
         <div class="day-layout" id="day-layout">
           <div class="card" style="margin-bottom:0">
-            <div class="paint-bar" id="paint-bar"></div>
+            <div class="paint-bar" id="paint-bar" style="display:none"></div>
             <div class="legend2">
               <span><i class="sw avail"></i> Open (shows $/hr)</span>
               <span><i class="sw booked"></i> Booked</span>
               <span><i class="sw" style="background:rgba(255,91,91,.16);border-color:#ff5b5b"></i> Closed / status</span>
-              <span class="hint">Set the usual week in Schedule Templates · pick a colour above and drag on the sheet for a one-off day · tap a slot to add · drag a booking to move it</span>
+              <span class="hint">Set the usual week in Schedule Templates · press “Paint status” for a one-off day · tap a slot to add · drag a booking to move it</span>
             </div>
             <div class="grid-scroll"><div id="bk-grid"></div></div>
           </div>
@@ -1903,20 +1905,26 @@ function buildDayPaint(){
   const step=SETTINGS.slot_step||30;
   realBays().forEach(b=>{ for(let m=open*60;m<close*60;m+=step){ const p=findOvStatus(b.id, iso, m); if(p) DAYPAINT[b.id+':'+m]=p; } });
 }
+let PAINT_OPEN=false;   // the palette is hidden until the manager presses "Paint status"
+function togglePaint(){
+  if(VIEW!=='day') return;
+  PAINT_OPEN=!PAINT_OPEN;
+  if(!PAINT_OPEN) setBrush(null);   // closing the palette stops painting
+  renderPalette();
+}
 function renderPalette(){
-  const bar=$('#paint-bar'); if(!bar) return;
-  if(VIEW!=='day'){ bar.style.display='none'; document.body.classList.remove('painting'); return; }
+  const bar=$('#paint-bar'), tog=$('#paint-toggle'); if(!bar) return;
+  if(tog){ tog.style.display = VIEW==='day' ? '' : 'none'; tog.classList.toggle('on', PAINT_OPEN && VIEW==='day'); tog.textContent = (PAINT_OPEN&&VIEW==='day') ? 'Done painting' : 'Paint status'; }
+  if(!(VIEW==='day' && PAINT_OPEN)){ bar.style.display='none'; bar.innerHTML=''; document.body.classList.remove('painting'); return; }
   bar.style.display='';
   const ss=scheduleStatuses();
   if(!ss.length){ bar.innerHTML='<span class="paint-lead dim">Add a schedule status to start painting — see the Statuses tab.</span>'; return; }
   bar.innerHTML = `<span class="paint-lead">Paint:</span>`
     + ss.map((s,i)=>`<button class="paint-sw" data-i="${i}" title="${esc(s.label)}"><span class="paint-dot" style="background:${norm6(s.color)}"></span>${esc(s.label)}</button>`).join('')
     + `<button class="paint-sw paint-erase" data-erase="1"><span class="paint-dot paint-dot-x"></span>Erase</button>`
-    + `<button class="btn btn-ghost btn-sm paint-done" style="display:none;margin-left:2px">Done</button>`
-    + `<span class="paint-hint" style="display:none">Press a slot and drag to the opposite corner to fill the block · click a bay name or a time to fill it · “Done” when finished</span>`;
+    + `<span class="paint-hint">Pick a colour, then press a slot and drag to the opposite corner to fill the block · click a bay name or a time to fill it</span>`;
   bar.querySelectorAll('.paint-sw[data-i]').forEach(btn=>btn.onclick=()=>setBrush(statusFieldsBrush(ss[+btn.dataset.i]), btn));
   bar.querySelector('.paint-erase').onclick=e=>setBrush('erase', e.currentTarget);
-  bar.querySelector('.paint-done').onclick=()=>setBrush(null);
   if(ACTIVE_BRUSH){   // restore highlight after a re-render (loadSchedule rebuilds the bar)
     let btn=null;
     if(ACTIVE_BRUSH==='erase') btn=bar.querySelector('.paint-erase');
@@ -1924,18 +1932,15 @@ function renderPalette(){
     if(btn) btn.classList.add('on');
     document.body.classList.add('painting');
     document.body.style.setProperty('--brush', ACTIVE_BRUSH==='erase'?'#ff5b5b':norm6(ACTIVE_BRUSH.color));
-    bar.querySelector('.paint-done').style.display=''; bar.querySelector('.paint-hint').style.display='';
   }
 }
+$('#paint-toggle').onclick=togglePaint;
 function setBrush(b, btn){
   ACTIVE_BRUSH=b; const bar=$('#paint-bar'); if(!bar) return;
   bar.querySelectorAll('.paint-sw').forEach(x=>x.classList.remove('on'));
   if(b && btn) btn.classList.add('on');
   document.body.classList.toggle('painting', !!b);
   document.body.style.setProperty('--brush', !b?'transparent':(b==='erase'?'#ff5b5b':norm6(b.color)));
-  const done=bar.querySelector('.paint-done'), hint=bar.querySelector('.paint-hint');
-  if(done) done.style.display=b?'':'none';
-  if(hint) hint.style.display=b?'':'none';
 }
 function brushBand(){ return ACTIVE_BRUSH==='erase' ? null : { open:ACTIVE_BRUSH.open, color:ACTIVE_BRUSH.color, label:ACTIVE_BRUSH.label }; }
 function paintKey(bay,m){ if(ACTIVE_BRUSH==='erase') delete DAYPAINT[bay+':'+m]; else DAYPAINT[bay+':'+m]=brushBand(); }
