@@ -350,6 +350,9 @@
   body.painting .bkgrid th[data-bay],body.painting .bkgrid td.t[data-min]{cursor:cell}
   body.painting #bk-grid{user-select:none;-webkit-user-select:none}
   body.painting .bkgrid th[data-bay]:hover,body.painting .bkgrid td.t[data-min]:hover{color:var(--orange)}
+  body.painting .cell.open.sprice:hover{box-shadow:none}   /* only the selection ring highlights while painting */
+  /* Live rectangle preview while dragging */
+  .bkgrid td.cell.sel-paint{box-shadow:0 0 0 2px var(--brush,#fff) inset!important;border-color:var(--brush,#fff)!important}
 
   /* Slot sheet (add / manage) */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:none;place-items:center;z-index:50;padding:20px}
@@ -1890,7 +1893,7 @@ function openCellTD(b, iso, m){
 
 // ---- Paint palette + drag interaction ----
 let ACTIVE_BRUSH=null;   // null | 'erase' | { open, color, label }
-let STROKING=false;
+let SELECTING=false, SEL_ANCHOR=null, SEL_CUR=null;   // rectangle drag-select state
 function statusFieldsBrush(s){ return { open:s.kind!=='closed', color:s.color, label:s.label }; }
 function buildDayPaint(){
   DAYPAINT={};
@@ -1910,7 +1913,7 @@ function renderPalette(){
     + ss.map((s,i)=>`<button class="paint-sw" data-i="${i}" title="${esc(s.label)}"><span class="paint-dot" style="background:${norm6(s.color)}"></span>${esc(s.label)}</button>`).join('')
     + `<button class="paint-sw paint-erase" data-erase="1"><span class="paint-dot paint-dot-x"></span>Erase</button>`
     + `<button class="btn btn-ghost btn-sm paint-done" style="display:none;margin-left:2px">Done</button>`
-    + `<span class="paint-hint" style="display:none">Drag across the sheet · click a bay name or a time to fill it · “Done” when finished</span>`;
+    + `<span class="paint-hint" style="display:none">Press a slot and drag to the opposite corner to fill the block · click a bay name or a time to fill it · “Done” when finished</span>`;
   bar.querySelectorAll('.paint-sw[data-i]').forEach(btn=>btn.onclick=()=>setBrush(statusFieldsBrush(ss[+btn.dataset.i]), btn));
   bar.querySelector('.paint-erase').onclick=e=>setBrush('erase', e.currentTarget);
   bar.querySelector('.paint-done').onclick=()=>setBrush(null);
@@ -1920,6 +1923,7 @@ function renderPalette(){
     else { const i=ss.findIndex(s=>s.label===ACTIVE_BRUSH.label && (s.color||'')===(ACTIVE_BRUSH.color||'')); if(i>=0) btn=bar.querySelector('.paint-sw[data-i="'+i+'"]'); }
     if(btn) btn.classList.add('on');
     document.body.classList.add('painting');
+    document.body.style.setProperty('--brush', ACTIVE_BRUSH==='erase'?'#ff5b5b':norm6(ACTIVE_BRUSH.color));
     bar.querySelector('.paint-done').style.display=''; bar.querySelector('.paint-hint').style.display='';
   }
 }
@@ -1928,6 +1932,7 @@ function setBrush(b, btn){
   bar.querySelectorAll('.paint-sw').forEach(x=>x.classList.remove('on'));
   if(b && btn) btn.classList.add('on');
   document.body.classList.toggle('painting', !!b);
+  document.body.style.setProperty('--brush', !b?'transparent':(b==='erase'?'#ff5b5b':norm6(b.color)));
   const done=bar.querySelector('.paint-done'), hint=bar.querySelector('.paint-hint');
   if(done) done.style.display=b?'':'none';
   if(hint) hint.style.display=b?'':'none';
@@ -1939,13 +1944,28 @@ function paintable(bay,iso,m){
   return !findBooking(bay,iso,m) && !findOvBlock(bay,iso,m);
 }
 function paintTdFrom(el){ const td=el&&el.closest&&el.closest('td.cell'); return (td && td.dataset && td.dataset.min!=null && $('#bk-grid').contains(td)) ? td : null; }
-function paintCellNode(td){
-  const bay=td.dataset.bay, m=+td.dataset.min, iso=$('#bk-date').value;
-  if(!bay || isNaN(m) || !paintable(bay,iso,m)) return;
-  paintKey(bay,m);
-  const bObj=(SETTINGS.bays||[]).find(x=>x.id===bay)||{id:bay};
-  const tmp=document.createElement('tbody'); tmp.innerHTML='<tr>'+openCellTD(bObj, iso, m)+'</tr>';
-  td.replaceWith(tmp.querySelector('td'));
+// The full rectangle of cells between the press point (SEL_ANCHOR) and the current cell (SEL_CUR):
+// every bay from column A→B and every slot from time A→B, inclusive.
+function selectionCells(){
+  if(!SEL_ANCHOR||!SEL_CUR) return [];
+  const hrs=hoursForDate($('#bk-date').value); if(!(hrs[1]>hrs[0])) return [];
+  const step=SETTINGS.slot_step||30, bays=realBays().map(b=>b.id);
+  const ai=bays.indexOf(SEL_ANCHOR.bay), ci=bays.indexOf(SEL_CUR.bay); if(ai<0||ci<0) return [];
+  const b0=Math.min(ai,ci), b1=Math.max(ai,ci);
+  const m0=Math.min(SEL_ANCHOR.m,SEL_CUR.m), m1=Math.max(SEL_ANCHOR.m,SEL_CUR.m);
+  const cells=[];
+  for(let bi=b0;bi<=b1;bi++) for(let m=m0;m<=m1;m+=step) cells.push({bay:bays[bi], m});
+  return cells;
+}
+function clearSelection(){ $('#bk-grid').querySelectorAll('.sel-paint').forEach(x=>x.classList.remove('sel-paint')); }
+function showSelection(cells){
+  const iso=$('#bk-date').value; clearSelection();
+  cells.forEach(({bay,m})=>{ if(!paintable(bay,iso,m)) return; const td=$('#bk-grid').querySelector('td.cell[data-bay="'+bay+'"][data-min="'+m+'"]'); if(td) td.classList.add('sel-paint'); });
+}
+function commitSelection(cells){
+  const iso=$('#bk-date').value; let n=0;
+  cells.forEach(({bay,m})=>{ if(paintable(bay,iso,m)){ paintKey(bay,m); n++; } });
+  if(n){ renderGrid(); persistDayPaint(); }
 }
 function paintColumn(bay){
   const iso=$('#bk-date').value, [open,close]=hoursForDate(iso); if(!(close>open)) return;
@@ -1981,16 +2001,27 @@ async function persistDayPaint(){
   if(rows.length){ const ins=await sb.from('schedule_overrides').insert(rows); if(ins.error){ if(!isAuthError(ins.error)) toast(ins.error.message,'err'); return; } }
   await loadSchedule();
 }
-// Delegated paint handlers (attached once; the grid's innerHTML is replaced on each render).
+// Rectangle drag-select (attached once; the grid's innerHTML is replaced on each render).
+// Press a cell and drag to the opposite corner — the whole bay-range × time-range fills.
 $('#bk-grid').addEventListener('pointerdown', e=>{
   if(!ACTIVE_BRUSH) return;
   const th=e.target.closest('th[data-bay]'); if(th){ e.preventDefault(); paintColumn(th.dataset.bay); return; }
   const tt=e.target.closest('td.t[data-min]'); if(tt){ e.preventDefault(); paintRow(+tt.dataset.min); return; }
   const td=paintTdFrom(e.target); if(!td) return;
-  e.preventDefault(); STROKING=true; paintCellNode(td);
+  e.preventDefault(); SELECTING=true;
+  SEL_ANCHOR={bay:td.dataset.bay, m:+td.dataset.min}; SEL_CUR={bay:SEL_ANCHOR.bay, m:SEL_ANCHOR.m};
+  showSelection(selectionCells());
 });
-document.addEventListener('pointermove', e=>{ if(!STROKING||!ACTIVE_BRUSH) return; const td=paintTdFrom(document.elementFromPoint(e.clientX,e.clientY)); if(td) paintCellNode(td); });
-document.addEventListener('pointerup', ()=>{ if(!STROKING) return; STROKING=false; persistDayPaint(); });
+document.addEventListener('pointermove', e=>{
+  if(!SELECTING) return;
+  const td=paintTdFrom(document.elementFromPoint(e.clientX,e.clientY)); if(!td) return;
+  const nb=td.dataset.bay, nm=+td.dataset.min;
+  if(!SEL_CUR || SEL_CUR.bay!==nb || SEL_CUR.m!==nm){ SEL_CUR={bay:nb, m:nm}; showSelection(selectionCells()); }
+});
+document.addEventListener('pointerup', ()=>{
+  if(!SELECTING) return; SELECTING=false;
+  const cells=selectionCells(); clearSelection(); SEL_ANCHOR=SEL_CUR=null; commitSelection(cells);
+});
 
 // effective open/close for a specific date, honouring venue-wide overrides
 function hoursForDate(iso){
