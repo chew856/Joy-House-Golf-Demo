@@ -3,11 +3,15 @@ import express from 'express';
 import Stripe from 'stripe';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CONFIG, priceForBooking, summaryFor, stripeStatus } from './lib/booking.js';
+import {
+  priceForBooking, summaryFor, stripeStatus, normalizeSettings, bayName, fmtMin, hoursUntilBooking,
+  overrideEffects, overrideConflicts, weeklyStatusBlocked, weeklyStatusConflicts,
+} from './lib/booking.js';
+import { getSettings, getBookingsForDate, getOverridesForDate, insertBooking, dbEnabled, admin } from './lib/db.js';
 
 // Local dev server. On Vercel the same logic runs as serverless functions in /api.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const { PORT = 4242, STRIPE_WEBHOOK_SECRET } = process.env;
+const { PORT = 4242, STRIPE_WEBHOOK_SECRET, SUPABASE_URL, SUPABASE_ANON_KEY } = process.env;
 
 const { enabled: stripeEnabled, hasLive, secretKey, publishableKey } = stripeStatus(process.env);
 const stripe = stripeEnabled ? new Stripe(secretKey) : null;
@@ -16,14 +20,14 @@ if (hasLive) {
   console.error('\n⛔  LIVE Stripe keys detected in .env — refusing to start Stripe.');
   console.error('   This is a prototype: use TEST keys (sk_test_ / rk_test_ / pk_test_) only.\n');
 } else if (!stripeEnabled) {
-  console.warn('\n⚠  Stripe keys not set — running in SIMULATED checkout mode.');
-  console.warn('   Copy .env.example to .env and add your test keys to enable real Stripe.\n');
+  console.warn('\n⚠  Stripe keys not set — running in SIMULATED checkout mode.\n');
 }
+console.log(dbEnabled ? '🗄  Supabase connected — live settings & bookings.' : '🗄  Supabase not set — using built-in demo data.');
 
 const app = express();
 
 // Webhook needs the raw body, so register it BEFORE express.json().
-app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   if (!stripeEnabled) return res.json({ received: true });
   let event;
   if (STRIPE_WEBHOOK_SECRET) {
@@ -38,31 +42,135 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), (req, res) =
   }
   if (event.type === 'payment_intent.succeeded') {
     const pi = event.data.object;
-    console.log(`✅ Booking PAID — ${pi.metadata?.bayName} · ${pi.metadata?.summary}`);
+    const md = pi.metadata || {};
+    if (md.dateISO && md.bayId) {
+      let name = null, email = pi.receipt_email || null, phone = null;
+      try {
+        if (pi.latest_charge) {
+          const ch = await stripe.charges.retrieve(pi.latest_charge);
+          const bd = ch.billing_details || {};
+          name = bd.name || null; email = email || bd.email || null; phone = bd.phone || null;
+        }
+      } catch (_) {}
+      const { error } = await insertBooking({
+        bay_id: md.bayId, booking_date: md.dateISO, start_min: Number(md.startMin), end_min: Number(md.endMin),
+        status: 'confirmed', customer_name: name, customer_email: email, customer_phone: phone,
+        amount_cents: pi.amount, stripe_payment_intent: pi.id, source: 'online',
+      });
+      console.log(error ? `⚠ Booking insert failed: ${error}` : `✅ Booking PAID & saved — ${md.summary}`);
+    }
   }
   res.json({ received: true });
 });
 
 app.use(express.json());
+
+// /admin → manager portal, /manage → customer self-service (before static so clean URLs work)
+app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'demo', 'admin.html')));
+app.get('/manage', (_req, res) => res.sendFile(path.join(__dirname, 'demo', 'manage.html')));
 app.use(express.static(path.join(__dirname, 'demo')));
 
+// Customer booking lookup + self-service cancellation (24-hour policy enforced server-side).
+app.get('/api/booking', async (req, res) => {
+  const id = req.query.id || '';
+  if (!/^[0-9a-fA-F-]{10,}$/.test(id)) return res.status(400).json({ ok: false, error: 'Invalid link.' });
+  const db = admin();
+  if (!db) return res.status(503).json({ ok: false, error: 'Not configured.' });
+  const { data, error } = await db.from('bookings')
+    .select('id,bay_id,booking_date,start_min,end_min,status,customer_name').eq('id', id).maybeSingle();
+  if (error || !data) return res.status(404).json({ ok: false, error: 'Booking not found.' });
+  const settings = normalizeSettings(await getSettings());
+  const hoursUntil = hoursUntilBooking(data.booking_date, data.start_min);
+  res.json({ ok: true, booking: {
+    id: data.id, bay: bayName(settings, data.bay_id) || data.bay_id, booking_date: data.booking_date,
+    start: fmtMin(data.start_min), end: fmtMin(data.end_min), status: data.status,
+    customerName: data.customer_name || null, hoursUntil, canCancel: data.status === 'confirmed' && hoursUntil >= 24,
+  } });
+});
+
+app.post('/api/cancel-booking', async (req, res) => {
+  const id = (req.body && req.body.id) || '';
+  if (!/^[0-9a-fA-F-]{10,}$/.test(id)) return res.status(400).json({ ok: false, error: 'Invalid request.' });
+  const db = admin();
+  if (!db) return res.status(503).json({ ok: false, error: 'Not configured.' });
+  const { data, error } = await db.from('bookings').select('id,booking_date,start_min,status').eq('id', id).maybeSingle();
+  if (error || !data) return res.status(404).json({ ok: false, error: 'Booking not found.' });
+  if (data.status === 'cancelled') return res.json({ ok: true, already: true });
+  if (data.status !== 'confirmed') return res.status(400).json({ ok: false, error: "This booking can't be cancelled online." });
+  if (hoursUntilBooking(data.booking_date, data.start_min) < 24) {
+    return res.status(403).json({ ok: false, code: 'too_late', error: 'Cancellations must be made at least 24 hours before your tee time. Please call the shop to cancel.' });
+  }
+  let upd = await db.from('bookings').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).eq('id', id);
+  if (upd.error && /cancelled_at/.test(upd.error.message || '')) {
+    upd = await db.from('bookings').update({ status: 'cancelled' }).eq('id', id);
+  }
+  if (upd.error) return res.status(500).json({ ok: false, error: upd.error.message });
+  res.json({ ok: true });
+});
+
 app.get('/api/config', (_req, res) => {
-  res.json({ stripeEnabled, publishableKey: stripeEnabled ? publishableKey : null });
+  res.json({
+    stripeEnabled,
+    publishableKey: stripeEnabled ? publishableKey : null,
+    dbEnabled,
+    supabase: SUPABASE_URL && SUPABASE_ANON_KEY ? { url: SUPABASE_URL, anonKey: SUPABASE_ANON_KEY } : null,
+  });
+});
+
+app.get('/api/availability', async (req, res) => {
+  const row = await getSettings();
+  if (!row) return res.json({ dbEnabled: false });
+  const settings = normalizeSettings(row);
+  const dateISO = req.query.date || '';
+  const booked = {};
+  const closed = {};
+  let dateHours = null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
+    for (const b of await getBookingsForDate(dateISO)) (booked[b.bay_id] ||= []).push([b.start_min, b.end_min]);
+    const overrides = await getOverridesForDate(dateISO);
+    const fx = overrideEffects(overrides, settings, dateISO);
+    dateHours = fx.dateHours;
+    for (const [bayId, ranges] of Object.entries(fx.blocked)) for (const r of ranges) (booked[bayId] ||= []).push(r);
+    for (const [bayId, ranges] of Object.entries(weeklyStatusBlocked(settings, overrides, dateISO)))
+      for (const r of ranges) { (booked[bayId] ||= []).push(r); (closed[bayId] ||= []).push(r); }
+  }
+  res.json({
+    dbEnabled: true,
+    settings: {
+      bays: settings.bays.filter((b) => !b.holding), hours: settings.hours, slotStep: settings.slotStep,
+      minMins: settings.minMins, maxParty: settings.maxParty, peakStartHour: settings.peakStartHour,
+      rates: settings.rates, bayRates: settings.bayRates,
+    },
+    dateHours,
+    booked,
+    closed,
+  });
 });
 
 app.post('/api/create-payment-intent', async (req, res) => {
   if (!stripeEnabled) return res.status(503).json({ error: 'Stripe not configured' });
   try {
     const { dateISO, bayId, startMin, endMin, party } = req.body;
-    const amount = priceForBooking({ dateISO, bayId, startMin, endMin });
-    const players = Math.min(Math.max(parseInt(party, 10) || 1, 1), CONFIG.maxParty);
-    const bayName = CONFIG.bays[bayId];
+    const settings = normalizeSettings(await getSettings());
+    const overrides = await getOverridesForDate(dateISO);
+    const fx = overrideEffects(overrides, settings, dateISO);
+    const amount = priceForBooking({ settings, dateISO, bayId, startMin, endMin, dateHours: fx.dateHours });
+    const players = Math.min(Math.max(parseInt(party, 10) || 1, 1), settings.maxParty);
+    const conflict = (await getBookingsForDate(dateISO))
+      .some((b) => b.bay_id === bayId && Number(startMin) < b.end_min && Number(endMin) > b.start_min);
+    if (conflict) return res.status(409).json({ error: 'That time was just booked — pick another slot.' });
+    if (overrideConflicts(fx, settings, dateISO, bayId, Number(startMin), Number(endMin)) ||
+        weeklyStatusConflicts(settings, overrides, dateISO, bayId, Number(startMin), Number(endMin))) {
+      return res.status(409).json({ error: 'That time is unavailable — pick another slot.' });
+    }
     const pi = await stripe.paymentIntents.create({
-      amount,
-      currency: CONFIG.currency,
+      amount, currency: settings.currency,
       automatic_payment_methods: { enabled: true },
-      description: `${bayName} — simulator session`,
-      metadata: { bayId, bayName, summary: summaryFor({ dateISO, startMin, endMin, players }), players: String(players) },
+      description: `${bayName(settings, bayId)} — simulator session`,
+      metadata: {
+        bayId, bayName: bayName(settings, bayId), dateISO, startMin: String(startMin), endMin: String(endMin),
+        players: String(players), summary: summaryFor({ dateISO, startMin, endMin, players }),
+      },
     });
     res.json({ clientSecret: pi.client_secret, amount });
   } catch (err) {
@@ -72,5 +180,6 @@ app.post('/api/create-payment-intent', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`\n🏌  Joy House Golf booking demo running at  http://localhost:${PORT}\n`);
+  console.log(`\n🏌  Joy House Golf booking demo running at  http://localhost:${PORT}`);
+  console.log(`    Manager portal:  http://localhost:${PORT}/admin\n`);
 });

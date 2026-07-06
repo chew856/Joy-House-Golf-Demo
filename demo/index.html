@@ -25,6 +25,8 @@
     --radius: 14px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { scrollbar-width: none; -ms-overflow-style: none; }
+  *::-webkit-scrollbar { width: 0; height: 0; display: none; }
   html, body { height: 100%; }
   body {
     background: radial-gradient(1200px 600px at 70% -10%, #1a1a1a 0%, var(--black) 55%) , var(--black);
@@ -46,7 +48,7 @@
   }
   .nav { display: flex; align-items: center; justify-content: space-between; height: 76px; }
   .brand { display: flex; align-items: center; gap: 14px; }
-  .brand img { height: 46px; width: auto; display: block; }
+  .brand img { height: 62px; width: auto; display: block; }
   .brand-fallback { font-family: 'Space Grotesk'; font-weight: 700; font-size: 22px; }
   .brand-fallback .joy { color: var(--white); }
   .brand-fallback .hg { color: var(--green); }
@@ -73,6 +75,7 @@
   .panel h2 { font-size: 18px; margin-bottom: 4px; }
   .panel .sub { color: var(--dim); font-size: 13px; }
   .stack { padding: 22px 0 150px; }
+  #times-panel { scroll-margin-top: 90px; }
 
   /* Date: split layout — calendar + day summary */
   .date-layout { display: grid; grid-template-columns: 7fr 5fr; gap: 44px; align-items: stretch;
@@ -124,11 +127,14 @@
   .swatch.buf { background: repeating-linear-gradient(45deg,#1c1c1c,#1c1c1c 3px,#0e0e0e 3px,#0e0e0e 6px); border-color: var(--border); }
   .swatch.bk { background: rgba(229,57,53,.16); border-color: #E53935; border-style: dashed; }
 
-  .grid-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+  .grid-scroll { overflow-x: auto; margin: 0 -4px; padding: 0 4px; -webkit-overflow-scrolling: touch; }
+  .promo-note { background: rgba(240,82,61,.12); border: 1px solid rgba(240,82,61,.4); color: #f0a093;
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-size: 14.5px; font-weight: 500; }
   .grid { width: 100%; min-width: 680px; border-collapse: separate; border-spacing: 6px; }
   .grid th { font-family: 'Space Grotesk'; font-weight: 700; font-size: 13.5px; text-align: center; padding: 4px 6px 10px;
     color: var(--white); vertical-align: bottom; }
   .grid th .bmeta { display: block; font-family: 'Raleway'; font-weight: 500; font-size: 11px; color: var(--dim); margin-top: 3px; letter-spacing: .02em; }
+  .grid th .bmeta.promo { color: #f0a093; font-weight: 600; margin-top: 5px; white-space: normal; line-height: 1.25; }
   .grid th.timehead { width: 70px; }
   .grid td.time { font-family: 'Space Grotesk'; font-weight: 700; font-size: 12.5px; color: var(--muted); text-align: right;
     padding-right: 10px; white-space: nowrap; width: 70px; }
@@ -138,11 +144,18 @@
   }
   .cell .price { font-family: 'Space Grotesk'; font-weight: 700; font-size: 14px; }
   .cell .per { font-size: 10px; color: var(--dim); }
-  .cell:not(.booked):hover { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
-  .cell:not(.booked):hover .per { color: var(--muted); }
+  .cell:not(.booked):not(.tight):hover { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+  .cell:not(.booked):not(.tight):hover .per { color: var(--muted); }
+  .cell.tight { opacity: .28; cursor: not-allowed; }
+  .input.invalid { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger) inset; }
+  .cell.callbook { cursor: default; padding: 5px 3px; background: rgba(240,82,61,.05); border-style: dashed; border-color: rgba(240,82,61,.35); }
+  .cell.callbook a { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 9.5px; font-weight: 700; line-height: 1.35;
+    letter-spacing: .01em; color: var(--muted); text-decoration: none; text-transform: uppercase; }
+  .cell.callbook a:hover { color: var(--green); }
   .cell.booked { color: #e0796f; background: rgba(229,57,53,.10); cursor: not-allowed; border-style: dashed; border-color: rgba(229,57,53,.5); }
   .cell.booked .price { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
   .cell.booked .per { display: none; }
+  .cell.booked.shut { color: var(--muted); background: repeating-linear-gradient(45deg,#1a1a1a,#1a1a1a 6px,#111 6px,#111 12px); border-color: var(--border); border-style: solid; }
   .cell.buffer { color: var(--dim); cursor: not-allowed; border-color: var(--border);
     background: repeating-linear-gradient(45deg,#161616,#161616 6px,#0e0e0e 6px,#0e0e0e 12px); }
   .cell.buffer .price { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
@@ -163,9 +176,24 @@
   .cb-item .v { font-family: 'Space Grotesk'; font-weight: 700; font-size: 15px; }
   .cb-item .v small { font-family: 'Raleway'; font-weight: 500; font-size: 12px; color: var(--muted); }
   .cb-total .v { font-size: 22px; }
-  .cb-select { background: var(--near-black); border: 1px solid var(--border); border-radius: 9px; color: var(--white);
-    font-family: inherit; font-size: 14px; font-weight: 600; padding: 8px 10px; cursor: pointer; }
-  .cb-select:focus { outline: none; border-color: var(--green); }
+  /* Themed dropdown (custom, replaces native select) */
+  .cbsel { position: relative; }
+  .cbsel-btn { display: inline-flex; align-items: center; gap: 8px; background: var(--near-black); border: 1px solid var(--border);
+    border-radius: 9px; color: var(--white); font-family: inherit; font-size: 14px; font-weight: 600; padding: 9px 12px;
+    cursor: pointer; white-space: nowrap; transition: .15s; }
+  .cbsel-btn:hover { border-color: var(--dim); }
+  .cbsel.open .cbsel-btn { border-color: var(--green); }
+  .cbsel-arrow { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round;
+    stroke-linejoin: round; opacity: .75; transition: transform .15s; }
+  .cbsel.open .cbsel-arrow { transform: rotate(180deg); }
+  .cbsel-menu { display: none; position: absolute; left: 0; bottom: calc(100% + 8px); min-width: 100%; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 12px; padding: 6px; z-index: 40; box-shadow: 0 14px 34px rgba(0,0,0,.55);
+    max-height: 240px; overflow-y: auto; scrollbar-width: none; }
+  .cbsel-menu::-webkit-scrollbar { display: none; }
+  .cbsel.open .cbsel-menu { display: block; }
+  .cbsel-opt { padding: 9px 12px; border-radius: 7px; font-size: 14px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+  .cbsel-opt:hover { background: var(--surface-2); color: var(--white); }
+  .cbsel-opt.sel { color: var(--green); font-weight: 700; }
   .cb-actions { display: flex; gap: 10px; align-items: center; }
 
   .btn { border: none; border-radius: 11px; padding: 14px 22px; font-weight: 700; font-size: 15px;
@@ -237,15 +265,64 @@
   footer { border-top: 1px solid var(--border); color: var(--dim); font-size: 12px; padding: 24px 0; text-align: center; }
 
   @media (max-width: 720px){
+    .wrap { padding: 0 16px; }
+    .nav { height: 68px; }
+    .brand img { height: 50px; }
+    .nav-cta { display: none; }
+    .hero { padding: 24px 0 4px; }
     .hero h1 { font-size: 26px; }
-    .checkbar .inner { gap: 14px; }
+    .hero p { font-size: 14px; }
+    .panel { padding: 16px; }
+    .panel-head { gap: 10px; }
+    .stack { padding: 16px 0 220px; }
+    .cal-grid { gap: 6px; }
+    .cal-day { height: 46px; font-size: 15px; }
+    .date-layout.full .cal-day { height: 52px; font-size: 16px; }
+    .day-summary .picked { font-size: 24px; }
+    .grid th { font-size: 12.5px; }
+    .checkbar .inner { padding: 12px 16px; gap: 12px; }
+    .cb-info { gap: 16px; min-width: 0; }
+    .cb-total .v { font-size: 20px; }
     .btn { padding: 13px 16px; font-size: 14px; }
     .cb-actions { width: 100%; }
     .cb-actions .btn { flex: 1; }
+    .overlay { padding: 12px; }
+    .modal { padding: 20px; }
+    .modal.pay.stripe { max-width: 96vw; }
+    .modal-close { top: 14px; right: 14px; }
+  }
+  @media (max-width: 420px){
+    .hero h1 { font-size: 23px; }
+    .steps { gap: 6px 12px; font-size: 12px; }
+    .step .sep { display: none; }
+    .cb-info { gap: 12px 16px; }
+    .cb-item .v { font-size: 14px; }
+    .cb-item .v small { font-size: 11px; }
+    .cb-total .v { font-size: 18px; }
+    .cb-select { padding: 7px 8px; font-size: 13px; }
+    .modal { padding: 16px; }
+    .modal h3 { font-size: 18px; }
+    .mini-recap .row { font-size: 12.5px; }
   }
 </style>
 </head>
 <body>
+
+<!-- Demo-only view switcher -->
+<div class="view-switch" aria-label="Switch view (demo only)">
+  <span class="vs-label">View</span>
+  <a href="/" class="vs-btn active">Client</a>
+  <a href="/admin" class="vs-btn">Manager</a>
+</div>
+<style>
+  .view-switch{position:fixed;bottom:18px;right:18px;z-index:9999;display:flex;align-items:center;gap:6px;
+    background:rgba(20,20,20,.92);border:1px solid #333;border-radius:999px;padding:6px 8px;
+    backdrop-filter:blur(8px);box-shadow:0 6px 24px rgba(0,0,0,.45);font-family:'Space Grotesk',sans-serif;}
+  .view-switch .vs-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7A7A7A;padding:0 6px;}
+  .view-switch .vs-btn{font-size:13px;font-weight:700;color:#B5B5B5;text-decoration:none;padding:6px 14px;border-radius:999px;transition:.15s;}
+  .view-switch .vs-btn:hover{color:#fff;}
+  .view-switch .vs-btn.active{background:#F0523D;color:#fff;}
+</style>
 
 <div class="demo-banner">
   <b>PROTOTYPE</b> — Branded booking demo for Joy House Golf · real bays, hours &amp; rates · Stripe step is simulated (no real charge)
@@ -302,7 +379,7 @@
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="times-panel">
     <div class="panel-head">
       <div>
         <h2>Available times</h2>
@@ -372,6 +449,7 @@
         <input class="input" placeholder="CVC" value="123" />
       </div>
 
+      <div class="pay-error" id="sim-error"></div>
       <button class="btn btn-primary btn-block" id="pay-btn" style="margin-top:6px">Pay <span id="pay-amt"></span></button>
     </div>
 
@@ -398,6 +476,7 @@
 
 <script>
 /* ---------- Real configuration (from joyhousegolf.com) ---------- */
+// Defaults — used until live settings load (and as fallback if the DB isn't configured).
 const CONFIG = {
   bays: [
     { id: 'B1', name: 'The Tee Time Tavern Bay', sim: 'Uneekor' },
@@ -406,28 +485,42 @@ const CONFIG = {
     { id: 'B4', name: 'The Mulligan Manor Bay',   sim: 'TrackMan' },
     { id: 'B5', name: 'The Sunset Sipper Bay',    sim: 'TrackMan' },
   ],
-  // Opening hours by weekday (0 = Sun … 6 = Sat). [openHour, closeHour] in 24h.
-  hours: {
-    0: [9, 20],   // Sunday    9 AM – 8 PM
-    1: [15, 23],  // Monday    3 PM – 11 PM
-    2: [11, 23],  // Tuesday   11 AM – 11 PM
-    3: [11, 23],  // Wednesday
-    4: [11, 23],  // Thursday
-    5: [11, 23],  // Friday
-    6: [9, 23],   // Saturday  9 AM – 11 PM
-  },
-  maxParty: 4,                 // up to 4 players per bay
-  peakStartHour: 17,           // 5 PM
-  slotStep: 30,                // 30-minute increments
-  minMins: 30,                 // minimum 30-minute session
+  hours: { 0:[9,21], 1:[11,23], 2:[11,23], 3:[11,23], 4:[11,23], 5:[11,23], 6:[9,23] },
+  maxParty: 4,
+  peakStartHour: 17,
+  slotStep: 30,
+  minMins: 60,
+  rates: { weekdayOffPeak:25, weekdayPeak:32, weekendOffPeak:30, weekendPeak:36 },
 };
 
-/* Per-hour rate: weekend (Sat/Sun) is pricier; everything jumps after 5 PM. */
-function rateFor(date, hour){
+// Live-data state: when the DB is on, settings + real bookings come from /api/availability.
+let DB = false;
+let bookedRanges = {};   // { bayId: [[startMin,endMin], …] } for the selected date
+let closedRanges = {};   // { bayId: [[startMin,endMin], …] } closed by the recurring weekly status pattern
+let dateHoursOverride = null;  // [open,close] from a schedule override for state.date, or null
+
+function applySettings(s){
+  if(!s) return;
+  CONFIG.bays = s.bays; CONFIG.hours = s.hours; CONFIG.slotStep = s.slotStep;
+  CONFIG.minMins = s.minMins; CONFIG.maxParty = s.maxParty;
+  CONFIG.peakStartHour = s.peakStartHour; CONFIG.rates = s.rates;
+  CONFIG.bayRates = s.bayRates || {};
+}
+
+/* Time-block pricing: each band {start,wd,we}; the band covering an hour is the greatest start ≤ hour. */
+function bandsOf(r){
+  if(r && Array.isArray(r.bands) && r.bands.length)
+    return r.bands.map(b=>({start:+b.start||0,wd:+b.wd||0,we:+b.we||0})).sort((a,b)=>a.start-b.start);
+  const peak = r&&r.peakStartHour!=null ? +r.peakStartHour : 17;
+  return [{start:0,wd:(r&&r.weekdayOffPeak)??25,we:(r&&r.weekendOffPeak)??30},
+          {start:peak,wd:(r&&r.weekdayPeak)??32,we:(r&&r.weekendPeak)??36}].sort((a,b)=>a.start-b.start);
+}
+function rateFor(date, hour, bayId){
   const weekend = [0,6].includes(date.getDay());
-  const peak = hour >= CONFIG.peakStartHour;
-  if (weekend) return peak ? 36 : 30;
-  return peak ? 32 : 25;
+  const r = (bayId && CONFIG.bayRates && CONFIG.bayRates[bayId]) || CONFIG.rates;
+  const bands=bandsOf(r); let band=bands[0];
+  for(const b of bands){ if(b.start<=hour) band=b; else break; }
+  return weekend ? band.we : band.wd;
 }
 
 /* ---------- State ---------- */
@@ -435,30 +528,57 @@ const state = { date: null, bay: null, startMin: null, endMin: null, party: 1, c
 
 /* ---------- Helpers ---------- */
 const $ = s => document.querySelector(s);
+const escHtml = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const money = n => '$' + (Number.isInteger(n) ? n : n.toFixed(2));
 const pad = n => String(n).padStart(2,'0');
 const fmtMin = m => { let h = Math.floor(m/60), mm = m%60; const ap = h<12?'AM':'PM'; let hh = h%12; if(hh===0) hh=12; return hh + (mm? ':'+pad(mm):'') + ' ' + ap; };
 const fmtFull = m => { let h = Math.floor(m/60), mm = m%60; const ap = h<12?'AM':'PM'; let hh = h%12; if(hh===0) hh=12; return hh + ':' + pad(mm) + ' ' + ap; };
 const fmtDur = mins => { const h=Math.floor(mins/60), mm=mins%60; return [h?h+' hr':'', mm?mm+' min':''].filter(Boolean).join(' '); };
-const dayHours = date => CONFIG.hours[date.getDay()];
+const dayHours = date => (dateHoursOverride && state.date && isoDate(date)===isoDate(state.date)) ? dateHoursOverride : CONFIG.hours[date.getDay()];
 const DOW_FULL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const MON_FULL=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const monthStart = d => new Date(d.getFullYear(), d.getMonth(), 1);
 function fmtHours([o,c]){ return fmtMin(o*60)+' – '+fmtMin(c*60); }
 
-// deterministic pseudo-random so "booked" half-hour blocks stay stable per day/bay
-function bookedSub(dateKey, bayId, minute){
+// Current time in America/Winnipeg → { y, mo(1-12), d, min(minutes-of-day) }
+function winnipegNow(){
+  const p = new Intl.DateTimeFormat('en-US', { timeZone:'America/Winnipeg',
+    year:'numeric', month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit', hour12:false })
+    .formatToParts(new Date());
+  const g = t => +p.find(x => x.type === t).value;
+  let h = g('hour'); if (h === 24) h = 0;
+  return { y: g('year'), mo: g('month'), d: g('day'), min: h*60 + g('minute') };
+}
+const dayRank = (y, mIdx, d) => y*10000 + mIdx*100 + d;           // mIdx = 0-based month
+const winnipegToday = () => { const w = winnipegNow(); return { rank: dayRank(w.y, w.mo-1, w.d), w }; };
+
+// Fallback when no DB: deterministic pseudo-random so "booked" blocks stay stable per day/bay.
+function bookedSubFallback(dateKey, bayId, minute){
   let h = 0; const s = dateKey+bayId+minute;
   for (let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
-  return (h % 100) < 20; // ~20% of half-hour blocks pre-booked
+  return (h % 100) < 20;
+}
+
+// Is the half-hour slot starting at `m` taken? Real bookings when DB is on, else the fallback.
+function isSlotBooked(date, bayId, m){
+  if (DB){
+    const ranges = bookedRanges[bayId] || [];
+    return ranges.some(([s,e]) => m < e && (m + CONFIG.slotStep) > s);
+  }
+  return bookedSubFallback(date.toDateString(), bayId, m);
+}
+
+// A slot the venue marked Closed (recurring weekly status) — unavailable, shown distinctly.
+function isSlotClosed(bayId, m){
+  const ranges = closedRanges[bayId] || [];
+  return ranges.some(([s,e]) => m < e && (m + CONFIG.slotStep) > s);
 }
 
 // first booked half-hour at or after `from`, else the day's close
 function firstBlock(date, bayId, from){
   const [, close] = dayHours(date);
-  const dateKey = date.toDateString();
   let m = from;
-  while (m < close*60 && !bookedSub(dateKey, bayId, m)) m += CONFIG.slotStep;
+  while (m < close*60 && !isSlotBooked(date, bayId, m)) m += CONFIG.slotStep;
   return m; // a booked slot's start, or close
 }
 
@@ -466,21 +586,42 @@ function firstBlock(date, bayId, from){
 function endOptions(date, bayId, startMin){
   const next = firstBlock(date, bayId, startMin);   // first booked slot, or close
   const opts = [];
-  for (let e = startMin + CONFIG.slotStep; e <= next; e += CONFIG.slotStep) opts.push(e);
+  for (let e = startMin + CONFIG.minMins; e <= next; e += CONFIG.slotStep) opts.push(e);
   return opts;
 }
 
 // a start time is bookable only if its own slot is free AND a valid end exists
 function startBookable(date, bayId, startMin){
-  if (bookedSub(date.toDateString(), bayId, startMin)) return false;
+  if (isSlotBooked(date, bayId, startMin)) return false;
   return endOptions(date, bayId, startMin).length > 0;
 }
 
+/* ---------- Live availability (settings + real bookings) ---------- */
+async function loadSettings(){
+  try{
+    const r = await fetch('/api/availability');
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d.dbEnabled && d.settings){ DB = true; applySettings(d.settings); renderAll(); }
+  }catch(e){}
+}
+async function loadAvailability(){
+  if(!state.date) return;
+  if(!DB){ return; }            // fallback mode — deterministic, nothing to fetch
+  try{
+    const r = await fetch('/api/availability?date='+isoDate(state.date));
+    if(!r.ok) return;
+    const d = await r.json();
+    if(d.dbEnabled){ applySettings(d.settings); bookedRanges = d.booked || {}; closedRanges = d.closed || {}; dateHoursOverride = d.dateHours || null; }
+  }catch(e){}
+}
+
 // price prorated per half hour so sessions crossing 5 PM bill correctly
-function priceRange(date, startMin, endMin){
+function priceRange(date, startMin, endMin, bayId){
+  const bay = bayId || state.bay;
   let total = 0;
   for (let m = startMin; m < endMin; m += CONFIG.slotStep){
-    total += rateFor(date, Math.floor(m/60)) / (60/CONFIG.slotStep);
+    total += rateFor(date, Math.floor(m/60), bay) / (60/CONFIG.slotStep);
   }
   return total;
 }
@@ -488,12 +629,14 @@ function priceRange(date, startMin, endMin){
 /* ---------- Calendar ---------- */
 function buildCalendar(){
   const grid = $('#cal-grid'); grid.innerHTML='';
-  const today = new Date(); today.setHours(0,0,0,0);
+  const todayRank = winnipegToday().rank;   // "today" per America/Winnipeg
   const view = state.calMonth;
   $('#cal-title').textContent = MON_FULL[view.getMonth()] + ' ' + view.getFullYear();
 
-  // prev disabled when viewing current month
-  $('#cal-prev').disabled = (view.getFullYear()===today.getFullYear() && view.getMonth()===today.getMonth());
+  // prev disabled when the displayed month is at/below the current Winnipeg month
+  const viewRank = dayRank(view.getFullYear(), view.getMonth(), 1);
+  const curMonthRank = dayRank(winnipegToday().w.y, winnipegToday().w.mo-1, 1);
+  $('#cal-prev').disabled = viewRank <= curMonthRank;
 
   ['S','M','T','W','T','F','S'].forEach(d=>{
     const el=document.createElement('div'); el.className='cal-dow'; el.textContent=d; grid.appendChild(el);
@@ -505,16 +648,23 @@ function buildCalendar(){
 
   for(let d=1; d<=days; d++){
     const date = new Date(view.getFullYear(), view.getMonth(), d);
+    const rank = dayRank(view.getFullYear(), view.getMonth(), d);
     const el = document.createElement('div'); el.className='cal-day'; el.textContent=d;
-    const isPast = date < today;
-    const isToday = date.getTime()===today.getTime();
+    const isPast = rank < todayRank;
+    const isToday = rank === todayRank;
     const isSel = state.date && date.toDateString()===state.date.toDateString();
     if(isPast) el.classList.add('past');
     if(isToday) el.classList.add('today');
     if(isSel) el.classList.add('sel');
-    if(!isPast) el.onclick=()=>{ state.date=date; clearSelection(); renderAll(); };
+    if(!isPast) el.onclick=async ()=>{ state.date=date; clearSelection(); bookedRanges={}; closedRanges={}; dateHoursOverride=null; renderAll(); scrollToTimes(); await loadAvailability(); renderAll(); };
     grid.appendChild(el);
   }
+}
+
+// Gently bring the availability grid into view after a date is picked.
+function scrollToTimes(){
+  const panel = document.getElementById('times-panel');
+  if(panel) setTimeout(()=> panel.scrollIntoView({ behavior:'smooth', block:'start' }), 120);
 }
 
 function renderDaySummary(){
@@ -545,29 +695,48 @@ function buildGrid(){
   const [open, close]=dayHours(state.date);
   const dateKey=state.date.toDateString();
 
-  let html='<table class="grid"><thead><tr><th class="timehead"></th>';
-  CONFIG.bays.forEach(b=>{ html+=`<th>${b.name}<span class="bmeta">${b.sim}</span></th>`; });
-  html+='</tr></thead><tbody>';
+  // If the chosen day is today (Winnipeg), hide start times that have already passed.
+  const tw = winnipegToday();
+  const isToday = dayRank(state.date.getFullYear(), state.date.getMonth(), state.date.getDate()) === tw.rank;
+  const minStart = isToday ? tw.w.min : -1;
 
-  // rows: every 30 min from open up to the last start that still fits a 1-hour minimum
+  let bodyRows='';
   for(let m=open*60; m + CONFIG.minMins <= close*60; m += CONFIG.slotStep){
-    html+=`<tr><td class="time">${fmtFull(m)}</td>`;
+    if(m < minStart) continue;                 // skip slots earlier than "now"
+    bodyRows+=`<tr><td class="time">${fmtFull(m)}</td>`;
     CONFIG.bays.forEach(b=>{
-      const realBooked = bookedSub(dateKey, b.id, m);
+      const realBooked = isSlotBooked(state.date, b.id, m);
       const ok = !realBooked && endOptions(state.date, b.id, m).length>0;   // bookable start
       const sel = state.bay===b.id && state.startMin===m;
+      const rate=rateFor(state.date, Math.floor(m/60), b.id);
       if(ok){
-        const rate=rateFor(state.date, Math.floor(m/60));
-        html+=`<td class="cell${sel?' sel':''}" data-bay="${b.id}" data-min="${m}">`
+        bodyRows+=`<td class="cell${sel?' sel':''}" data-bay="${b.id}" data-min="${m}">`
             + `<span class="price">$${rate}</span><span class="per">/hr</span></td>`;
+      } else if(realBooked){
+        const shut = isSlotClosed(b.id, m);
+        bodyRows+=`<td class="cell booked${shut?' shut':''}"><span class="price">${shut?'Closed':'Booked'}</span></td>`;
       } else {
-        html+=`<td class="cell booked"><span class="price">Booked</span></td>`;
+        // free, but not enough room for a full session (next booking/close is under the minimum) —
+        // let the customer phone the shop to grab the short slot.
+        bodyRows+=`<td class="cell callbook"><a href="tel:+12048154142" onclick="event.stopPropagation()">Please Call<br>(204)&nbsp;815-4142<br>to Book</a></td>`;
       }
     });
-    html+='</tr>';
+    bodyRows+='</tr>';
   }
-  html+='</tbody></table>';
-  host.innerHTML=html;
+
+  if(!bodyRows){
+    host.innerHTML='<div class="closed-note">No more start times today — pick another date above.</div>';
+    return;
+  }
+
+  let html='<table class="grid"><thead><tr><th class="timehead"></th>';
+  CONFIG.bays.forEach(b=>{
+    const bnote=(CONFIG.bayRates&&CONFIG.bayRates[b.id]&&CONFIG.bayRates[b.id].note);
+    html+=`<th>${b.name}<span class="bmeta">${b.sim}</span>${bnote?`<span class="bmeta promo">${escHtml(bnote)}</span>`:''}</th>`;
+  });
+  html+='</tr></thead><tbody>'+bodyRows+'</tbody></table>';
+  const note=CONFIG.rates&&CONFIG.rates.note;   // standard note applies to all bays
+  host.innerHTML=(note?`<div class="promo-note">${escHtml(note)}</div>`:'')+html;
 
   host.querySelectorAll('.cell[data-bay]').forEach(c=>{
     c.onclick=()=>{
@@ -584,6 +753,37 @@ function buildGrid(){
 function selectionValid(){ return state.date && state.bay && state.startMin!=null && state.endMin!=null; }
 function clearSelection(){ state.bay=null; state.startMin=null; state.endMin=null; }
 
+/* Themed dropdown (replaces native <select> so it matches the dark brand) */
+function cbSelectHTML(kind, value, options){
+  const cur = options.find(o => o.val === value);
+  return `<div class="cbsel" data-kind="${kind}">
+    <button type="button" class="cbsel-btn">${cur ? cur.label : ''}<svg class="cbsel-arrow" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+    <div class="cbsel-menu" role="listbox">
+      ${options.map(o=>`<div class="cbsel-opt${o.val===value?' sel':''}" data-val="${o.val}" role="option">${o.label}</div>`).join('')}
+    </div>
+  </div>`;
+}
+function closeAllCbSel(){ document.querySelectorAll('.cbsel.open').forEach(s=>s.classList.remove('open')); }
+function wireCbSelects(){
+  document.querySelectorAll('#cb-info .cbsel').forEach(sel=>{
+    sel.querySelector('.cbsel-btn').onclick = e => {
+      e.stopPropagation();
+      const open = sel.classList.contains('open');
+      closeAllCbSel();
+      if(!open) sel.classList.add('open');
+    };
+    sel.querySelectorAll('.cbsel-opt').forEach(opt=>{
+      opt.onclick = e => {
+        e.stopPropagation();
+        const val = +opt.dataset.val;
+        if(sel.dataset.kind==='end') state.endMin = val; else state.party = val;
+        renderCheckbar();
+      };
+    });
+  });
+}
+document.addEventListener('click', closeAllCbSel);
+
 function renderCheckbar(){
   const bar=$('#checkbar');
   if(!selectionValid()){ bar.classList.remove('show'); return; }
@@ -592,24 +792,18 @@ function renderCheckbar(){
   const opts=endOptions(state.date, state.bay, state.startMin);
   const price=priceRange(state.date, state.startMin, state.endMin);
 
-  const endSel = `<select class="cb-select" id="cb-end">` +
-    opts.map(e=>`<option value="${e}" ${e===state.endMin?'selected':''}>${fmtFull(e)}</option>`).join('') +
-    `</select>`;
-  const partySel = `<select class="cb-select" id="cb-party">` +
-    Array.from({length:CONFIG.maxParty},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===state.party?'selected':''}>${n} ${n>1?'players':'player'}</option>`).join('') +
-    `</select>`;
+  const endOpts = opts.map(e => ({ val: e, label: fmtFull(e) }));
+  const partyOpts = Array.from({length:CONFIG.maxParty},(_,i)=>i+1).map(n => ({ val: n, label: `${n} ${n>1?'players':'player'}` }));
 
   $('#cb-info').innerHTML=`
     <div class="cb-item"><div class="k">Bay</div><div class="v">${bay.name}<br><small>${bay.sim} · ${dateStr}</small></div></div>
     <div class="cb-item"><div class="k">Start</div><div class="v">${fmtFull(state.startMin)}</div></div>
-    <div class="cb-item"><div class="k">End time</div>${endSel}</div>
-    <div class="cb-item"><div class="k">Group size</div>${partySel}</div>
+    <div class="cb-item"><div class="k">End time</div>${cbSelectHTML('end', state.endMin, endOpts)}</div>
+    <div class="cb-item"><div class="k">Group size</div>${cbSelectHTML('party', state.party, partyOpts)}</div>
     <div class="cb-item cb-total"><div class="k">Total</div><div class="v">${money(price)}</div></div>`;
   bar.classList.add('show');
   if(typeof prefetchPI==='function') prefetchPI();
-
-  $('#cb-end').onchange=e=>{ state.endMin=+e.target.value; renderCheckbar(); };
-  $('#cb-party').onchange=e=>{ state.party=+e.target.value; };
+  wireCbSelects();
 }
 
 /* ---------- Steps ---------- */
@@ -747,7 +941,20 @@ $('#pay-overlay').addEventListener('click', e=>{ if(e.target===$('#pay-overlay')
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && $('#pay-overlay').classList.contains('show')) closePayment(); });
 
 /* Simulated fallback Pay button */
+// Basic "is this real" checks so bookings carry a usable email + phone.
+const validEmail = e => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((e||'').trim());
+function validPhone(p){ let d=(p||'').replace(/\D/g,''); if(d.length===11&&d[0]==='1') d=d.slice(1); return /^[2-9]\d{2}[2-9]\d{6}$/.test(d); }
+function checkContact(emailEl, phoneEl, errEl){
+  errEl.textContent='';
+  [emailEl,phoneEl].forEach(el=>el.classList.remove('invalid'));
+  if(!validEmail(emailEl.value)){ errEl.textContent='Please enter a valid email address.'; emailEl.classList.add('invalid'); emailEl.focus(); return false; }
+  if(!validPhone(phoneEl.value)){ errEl.textContent='Please enter a valid 10-digit phone number.'; phoneEl.classList.add('invalid'); phoneEl.focus(); return false; }
+  return true;
+}
+['#sc-email','#sc-phone','#cust-email','#cust-phone'].forEach(s=>{ const el=$(s); if(el) el.addEventListener('input',()=>el.classList.remove('invalid')); });
+
 $('#pay-btn').onclick=()=>{
+  if(!checkContact($('#cust-email'), $('#cust-phone'), $('#sim-error'))) return;
   const name=$('#cust-name').value.trim()||'Guest';
   $('#pay-overlay').classList.remove('show');
   showConfirmation(name);
@@ -756,6 +963,7 @@ $('#pay-btn').onclick=()=>{
 /* Real Stripe Pay button */
 $('#sc-pay').onclick=async ()=>{
   if(paying || !elements) return;
+  if(!checkContact($('#sc-email'), $('#sc-phone'), $('#pay-error'))) return;
   paying=true;
   const btn=$('#sc-pay'); const label=btn.innerHTML;
   btn.disabled=true; btn.textContent='Processing…'; $('#pay-error').textContent='';
@@ -825,9 +1033,10 @@ $('#conf-done').onclick=()=>{
 };
 
 /* ---------- Init ---------- */
-state.calMonth = monthStart(new Date());
+{ const w = winnipegNow(); state.calMonth = new Date(w.y, w.mo-1, 1); }
 renderAll();
 loadStripeConfig().then(handleReturn);
+loadSettings();   // pull live bays/hours/rates from the manager's settings (if DB is on)
 </script>
 </body>
 </html>

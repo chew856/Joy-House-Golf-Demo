@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Joy House Golf — Manage your booking</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+<style>
+  :root{ --black:#000;--near-black:#0E0E0E;--surface:#181818;--surface-2:#222;--border:#333;
+    --white:#fff;--muted:#B5B5B5;--dim:#7A7A7A;--orange:#F0523D;--danger:#ff5b5b;--ok:#4ec06a;--radius:16px; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  *{scrollbar-width:none;-ms-overflow-style:none}
+  *::-webkit-scrollbar{width:0;height:0;display:none}
+  body{background:radial-gradient(1200px 600px at 70% -10%,#1a1a1a 0%,var(--black) 55%),var(--black);
+    color:var(--white);font-family:'Raleway',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased;
+    display:grid;place-items:center;padding:24px}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;letter-spacing:-.01em}
+  .card{width:100%;max-width:440px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:30px}
+  .brand{font-family:'Space Grotesk';font-weight:700;font-size:18px;margin-bottom:22px}
+  .brand .o{color:var(--orange)}
+  h1{font-size:23px;margin-bottom:4px}
+  .sub{color:var(--dim);font-size:13.5px;margin-bottom:22px;line-height:1.5}
+  .kv{display:flex;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14.5px}
+  .kv:first-of-type{border-top:1px solid var(--border)}
+  .kv .k{color:var(--muted)}
+  .kv .v{font-weight:500;text-align:right}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .pill.ok{background:rgba(78,192,106,.14);color:#7ad492;border:1px solid rgba(78,192,106,.4)}
+  .pill.off{background:#1a1a1a;color:var(--dim);border:1px solid var(--border)}
+  .note{border-radius:12px;padding:14px 16px;font-size:13.5px;line-height:1.5;margin-top:20px}
+  .note.warn{background:rgba(240,82,61,.10);border:1px solid rgba(240,82,61,.4);color:#f0a093}
+  .note.info{background:var(--near-black);border:1px solid var(--border);color:var(--muted)}
+  .btn{display:block;width:100%;border:none;border-radius:11px;padding:14px;font-weight:700;font-size:15px;
+    font-family:'Space Grotesk';cursor:pointer;transition:.15s;margin-top:20px;text-align:center;text-decoration:none}
+  .btn-danger{background:var(--orange);color:#fff}.btn-danger:hover{background:#ff6450}
+  .btn-danger:disabled{background:#2a2a2a;color:#666;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:#fff;border-color:var(--dim)}
+  .call{color:var(--orange);text-decoration:none;font-weight:700}
+  .center{text-align:center}
+  .big{font-size:46px;line-height:1;margin:6px 0 14px;font-family:'Space Grotesk'}
+  .hidden{display:none}
+  .spin{color:var(--dim);text-align:center;padding:30px 0}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand"><span class="o">JOY</span> HOUSE GOLF</div>
+    <div id="content"><div class="spin">Loading your booking…</div></div>
+  </div>
+
+<script>
+const SHOP_PHONE = '+12048154142';
+const SHOP_PHONE_DISPLAY = '(204) 815-4142';
+const $ = s => document.querySelector(s);
+const params = new URLSearchParams(location.search);
+const bookingId = params.get('b') || params.get('id') || '';
+
+const fmtDate = iso => { try { return new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}); } catch(e){ return iso; } };
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(html){ $('#content').innerHTML = html; }
+
+function notFound(msg){
+  render(`<h1>Booking not found</h1>
+    <div class="sub">${esc(msg||"We couldn't find this booking. The link may be incorrect or the booking may have already been cancelled.")}</div>
+    <a class="btn btn-ghost" href="/">Back to booking site</a>`);
+}
+
+function details(b){
+  const statusPill = b.status==='cancelled'
+    ? '<span class="pill off">Cancelled</span>'
+    : '<span class="pill ok">Confirmed</span>';
+  let action;
+  if(b.status==='cancelled'){
+    action = `<div class="note info">This booking has been cancelled. If you'd like to rebook, head back to the booking site.</div>
+      <a class="btn btn-ghost" href="/">Book a new session</a>`;
+  } else if(b.canCancel){
+    action = `<div class="note info">Free cancellation up to 24 hours before your tee time.</div>
+      <button class="btn btn-danger" id="cancel-btn">Cancel this booking</button>`;
+  } else {
+    action = `<div class="note warn">Cancellations must be made at least <b>24 hours</b> before your tee time, so this booking can no longer be cancelled online. Please call the shop and we'll do our best to help.</div>
+      <a class="btn btn-danger" href="tel:${SHOP_PHONE}">Call ${SHOP_PHONE_DISPLAY}</a>`;
+  }
+  render(`
+    <h1>Your booking</h1>
+    <div class="sub">Review your reservation${b.canCancel?' or cancel it below':''}.</div>
+    ${b.customerName?`<div class="kv"><span class="k">Name</span><span class="v">${esc(b.customerName)}</span></div>`:''}
+    <div class="kv"><span class="k">Bay</span><span class="v">${esc(b.bay)}</span></div>
+    <div class="kv"><span class="k">Date</span><span class="v">${esc(fmtDate(b.booking_date))}</span></div>
+    <div class="kv"><span class="k">Time</span><span class="v">${esc(b.start)} – ${esc(b.end)}</span></div>
+    <div class="kv"><span class="k">Status</span><span class="v">${statusPill}</span></div>
+    ${action}`);
+  const btn = $('#cancel-btn');
+  if(btn) btn.onclick = () => doCancel(b);
+}
+
+async function doCancel(b){
+  const btn = $('#cancel-btn');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  let r;
+  try { r = await (await fetch('/api/cancel-booking',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id:b.id }) })).json(); }
+  catch(e){ r = { ok:false, error:'Network error — please try again.' }; }
+  if(r.ok){
+    render(`<div class="center">
+      <div class="big" style="color:var(--ok)">✓</div>
+      <h1>Booking cancelled</h1>
+      <div class="sub">Your reservation has been cancelled. You'll receive a confirmation shortly.</div>
+      <a class="btn btn-ghost" href="/">Book a new session</a></div>`);
+  } else if(r.code==='too_late'){
+    render(`<h1>Too close to tee time</h1>
+      <div class="note warn">${esc(r.error)}</div>
+      <a class="btn btn-danger" href="tel:${SHOP_PHONE}">Call ${SHOP_PHONE_DISPLAY}</a>
+      <a class="btn btn-ghost" href="/">Back to booking site</a>`);
+  } else {
+    btn.disabled = false; btn.textContent = 'Cancel this booking';
+    render(`<h1>Something went wrong</h1><div class="note warn">${esc(r.error||'Please try again or call the shop.')}</div>
+      <a class="btn btn-danger" href="tel:${SHOP_PHONE}">Call ${SHOP_PHONE_DISPLAY}</a>`);
+  }
+}
+
+async function load(){
+  if(!bookingId){ notFound('No booking was specified in this link.'); return; }
+  let r;
+  try { r = await (await fetch('/api/booking?id='+encodeURIComponent(bookingId))).json(); }
+  catch(e){ r = { ok:false }; }
+  if(!r || !r.ok || !r.booking){ notFound(r && r.error); return; }
+  details(r.booking);
+}
+load();
+</script>
+</body>
+</html>

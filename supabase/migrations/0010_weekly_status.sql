@@ -1,0 +1,12 @@
+-- Joy House Golf — recurring weekly tee-sheet status pattern
+-- Lets a manager set the default status for each weekday (e.g. Open every day, Closed on
+-- Mondays, a Happy-Hour band 5–7pm) that auto-applies to every future matching day. One-off
+-- exceptions still live in schedule_overrides and sit on top of this weekly base.
+-- Paste this whole file into Supabase → SQL Editor → New query → Run. Safe to re-run.
+--
+-- Shape: { "<weekday 0-6>": [ band, … ] } where each band is
+--   { "statusId":"…", "label":"…", "color":"#…", "open":true|false,
+--     "full":true         -- whole day + all bays (the weekday's default)
+--     | "start":540,"end":1380,"bays":["B1"]   -- a time band (minutes from midnight; bays [] = all)
+--   }
+alter table public.settings add column if not exists weekly_status jsonb not null default '{}'::jsonb;

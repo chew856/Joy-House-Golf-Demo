@@ -1,0 +1,2596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Joy House Golf — Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --black:#000;--near-black:#0E0E0E;--surface:#181818;--surface-2:#222;--border:#333;
+    --white:#fff;--muted:#B5B5B5;--dim:#7A7A7A;--orange:#F0523D;--orange-dim:#c7402e;--danger:#ff5b5b;--ok:#4ec06a;--radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  /* No visible scrollbars anywhere — scrolling still works via trackpad/wheel */
+  *{scrollbar-width:none;-ms-overflow-style:none}
+  *::-webkit-scrollbar{width:0;height:0;display:none}
+  body{background:radial-gradient(1200px 600px at 70% -10%,#1a1a1a 0%,var(--black) 55%),var(--black);
+    color:var(--white);font-family:'Raleway',system-ui,sans-serif;min-height:100vh;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:'Space Grotesk',sans-serif;letter-spacing:-.01em}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 24px}
+  a{color:var(--orange)}
+  header{border-bottom:1px solid var(--border);background:rgba(0,0,0,.6);position:sticky;top:0;z-index:20}
+  .nav{display:flex;align-items:center;justify-content:space-between;height:70px}
+  .brand{font-family:'Space Grotesk';font-weight:700;font-size:18px}
+  .brand .o{color:var(--orange)}
+  .tag{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.12em}
+  .btn{border:none;border-radius:10px;padding:11px 18px;font-weight:700;font-size:14px;font-family:'Space Grotesk';cursor:pointer;transition:.15s}
+  .btn-primary{background:var(--orange);color:#fff}.btn-primary:hover{background:#ff6450}
+  .btn-primary:disabled{background:#2a2a2a;color:#666;cursor:not-allowed}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border)}.btn-ghost:hover{color:#fff;border-color:var(--dim)}
+  .btn-sm{padding:7px 12px;font-size:12.5px;border-radius:8px}
+  .btn-danger{background:transparent;color:var(--danger);border:1px solid rgba(255,91,91,.4)}.btn-danger:hover{background:rgba(255,91,91,.1)}
+  .input,select.input{width:100%;padding:11px 12px;background:var(--near-black);border:1px solid var(--border);border-radius:9px;color:#fff;font-family:inherit;font-size:14px}
+  input.input,select.input{height:44px}
+  .input:focus{outline:none;border-color:var(--orange)}
+  label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-top:18px}
+  .panel h2{font-size:18px;margin-bottom:4px}.panel .sub{color:var(--dim);font-size:13px;margin-bottom:18px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .muted{color:var(--muted)} .dim{color:var(--dim)}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(140%);background:var(--surface-2);
+    border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:14px;transition:transform .25s,opacity .25s;
+    z-index:60;opacity:0;pointer-events:none}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1;pointer-events:auto}
+  .toast.ok{border-color:var(--ok)} .toast.err{border-color:var(--danger)}
+
+  /* Login */
+  .login-wrap{min-height:80vh;display:grid;place-items:center;padding:24px}
+  .login{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:30px}
+  .login h1{font-size:24px;margin-bottom:4px}.login .sub{color:var(--dim);font-size:13px;margin-bottom:22px}
+  .login .input{margin-bottom:12px}
+  .err{color:var(--danger);font-size:13px;margin-top:10px;min-height:18px}
+
+  /* Dashboard shell: sidebar + content */
+  .shell{display:flex;min-height:100vh}
+  .sidebar{width:230px;flex:0 0 230px;border-right:1px solid var(--border);background:rgba(0,0,0,.35);
+    display:flex;flex-direction:column;padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .side-brand{font-family:'Space Grotesk';font-weight:700;font-size:19px;line-height:1.1;padding:6px 10px 18px}
+  .side-brand .o{color:var(--orange)}
+  .side-brand .side-sub{display:block;font-family:'Raleway';font-weight:600;font-size:12px;color:var(--dim);letter-spacing:.12em;text-transform:uppercase;margin-top:4px}
+  .side-nav{display:flex;flex-direction:column;gap:3px;flex:1}
+  .side-cap{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.12em;padding:14px 12px 4px;font-family:'Space Grotesk'}
+  .side-cap:first-child{padding-top:2px}
+  .tab{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--muted);
+    cursor:pointer;font-weight:600;font-size:14px;font-family:'Space Grotesk';border:1px solid transparent}
+  .tab .ic{width:18px;text-align:center}
+  .tab:hover{background:var(--surface);color:#fff}
+  .tab.active{background:var(--surface-2);border-color:var(--orange);color:#fff}
+  .side-foot{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--border)}
+  .side-foot .who{font-size:12px;color:var(--dim);padding:0 4px 4px;word-break:break-all}
+  .content{flex:1;min-width:0;padding:0 30px 60px}
+
+  /* Toolbar (sticky header per view) */
+  .toolbar{position:sticky;top:0;z-index:10;background:rgba(14,14,14,.92);backdrop-filter:blur(10px);
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    padding:20px 0 16px;border-bottom:1px solid var(--border);margin-bottom:20px}
+  .toolbar h2{font-size:21px}
+  .day-nav{display:flex;gap:8px;align-items:center}
+  .day-nav .input{width:158px}
+  .day-label{color:var(--muted);font-size:13px;margin-top:3px}
+
+  /* Stats strip */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px}
+  .stat-n{font-family:'Space Grotesk';font-weight:700;font-size:26px}
+  .stat-l{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:22px;margin-bottom:18px}
+  .card-h{font-size:17px;margin-bottom:4px}
+  .legend2 .hint{margin-left:auto;color:var(--dim);font-size:12px}
+  .legend2{align-items:center}
+
+  @media(max-width:820px){
+    .shell{flex-direction:column}
+    .sidebar{width:auto;flex:none;height:auto;position:static;flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px;padding:12px 16px}
+    .side-brand{padding:0 8px 0 0}.side-brand .side-sub{display:none}
+    .side-nav{flex-direction:row;flex:1;flex-wrap:wrap}
+    .side-cap{display:none}
+    .side-foot{flex-direction:row;border-top:none;padding-top:0;margin-left:auto;align-items:center}
+    .side-foot .who{display:none}
+    .content{padding:0 16px 80px}
+    .stats{grid-template-columns:repeat(3,1fr);gap:10px}
+    .stat{padding:12px}.stat-n{font-size:20px}
+    .legend2 .hint{display:none}
+  }
+
+  /* Settings grid */
+  /* Time-block rate editor */
+  .band-head{display:grid;grid-template-columns:1fr 1fr 1fr 44px;gap:10px;margin:16px 0 8px;
+    font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .band-row{display:grid;grid-template-columns:1fr 1fr 1fr 44px;gap:10px;align-items:start;margin-bottom:8px}
+  .bd-when{display:flex;flex-direction:column;gap:5px}
+  .bd-range{font-size:12px;color:var(--dim);padding-left:3px;letter-spacing:.01em}
+  .bd-range b{color:var(--muted);font-weight:600}
+  .band-row .cur{position:relative}
+  .band-row .cur:before{content:'$';position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--dim);font-size:14px;z-index:1}
+  .band-row .cur input{padding-left:22px}
+  @media(max-width:640px){.band-head{display:none}.band-row{grid-template-columns:1fr 1fr 1fr 40px}}
+  .sec-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px}
+  .sec-title{font-size:15px;font-weight:650;letter-spacing:.01em}
+  .blk-list{display:flex;flex-wrap:wrap;gap:6px}
+  .blk{display:inline-flex;align-items:baseline;gap:5px;padding:3px 9px;border:1px solid var(--border);border-radius:7px;background:var(--near-black);font-size:13px;white-space:nowrap}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:700px){.grid2,.grid3{grid-template-columns:1fr}}
+  .field{margin-bottom:14px}
+  .hour-row{display:grid;gap:10px;align-items:end;margin-bottom:10px;grid-template-columns:90px 1fr 1fr}
+  #bays-list td{vertical-align:middle}
+  #bays-list .input{min-width:90px}
+  #bays-list .bay-name{min-width:200px}
+  .icon-btn{width:44px;height:44px;border-radius:9px;border:1px solid var(--border);background:var(--near-black);color:var(--danger);cursor:pointer;font-size:16px}
+  .icon-btn:hover{border-color:var(--danger)}
+  .save-bar{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+
+  /* CRUD rows (categories / statuses / tags) */
+  .crud-row{display:grid;grid-template-columns:1fr 56px 70px 40px;gap:10px;align-items:center;margin-bottom:10px}
+  .crud-row.no-sort{grid-template-columns:1fr 56px 40px}
+  .color-in{width:56px;height:44px;padding:4px;border:1px solid var(--border);border-radius:9px;background:var(--near-black);cursor:pointer}
+  .swatch{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:middle}
+
+  /* Membership plan cards */
+  .plans-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:18px}
+  .plan-card{background:var(--surface);border:1px solid var(--border);border-left-width:4px;border-radius:var(--radius);padding:18px}
+  .plan-card .plan-top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .plan-card .plan-top .input{font-family:'Space Grotesk';font-weight:700;font-size:16px}
+  .plan-card .mini{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+  .plan-card .badge{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em}
+  .plan-card .member-n{margin-left:auto;font-size:12px;color:var(--muted);white-space:nowrap}
+  .name-link{cursor:pointer;color:#fff;font-weight:600}.name-link:hover{color:var(--orange)}
+  .cust-history{max-height:240px;overflow:auto;border:1px solid var(--border);border-radius:10px;padding:2px 14px;background:var(--near-black)}
+  .hist-sum{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;padding:10px 0 6px;border-bottom:1px solid var(--border)}
+  .hist-row{padding:10px 0;border-bottom:1px solid var(--border);font-size:13.5px}
+  .hist-row:last-child{border-bottom:none}
+  .hist-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .hist-sub{font-size:12px;margin-top:4px}
+  textarea.input{resize:vertical;min-height:64px;line-height:1.4}
+
+  /* Toggle switch */
+  .switch{position:relative;display:inline-block;width:44px;height:25px;cursor:pointer}
+  .switch input{opacity:0;width:0;height:0;position:absolute}
+  .switch .track{position:absolute;inset:0;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;transition:.18s}
+  .switch .track:before{content:'';position:absolute;width:17px;height:17px;left:3px;top:3px;background:var(--dim);border-radius:50%;transition:.18s}
+  .switch input:checked + .track{background:rgba(78,192,106,.25);border-color:var(--ok)}
+  .switch input:checked + .track:before{transform:translateX(19px);background:var(--ok)}
+
+  /* Custom date picker (replaces the native OS calendar) */
+  .datepick{position:relative;display:block;width:100%}
+  .day-nav .datepick{width:188px}
+  .day-nav .dp-trigger{width:100%}
+  .dp-trigger{text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}
+  .dp-trigger:after{content:'';margin-left:auto;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--dim);flex:none}
+  .dp-trigger:hover:after{border-top-color:var(--muted)}
+
+  /* Custom select (replaces the native OS dropdown) */
+  .cs-wrap{position:relative;display:block;width:100%}
+  .day-nav .cs-wrap{width:auto;min-width:150px}
+  .cs-trigger{text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;width:100%}
+  .cs-trigger:after{content:'';margin-left:auto;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--dim);flex:none}
+  .cs-trigger:hover{border-color:var(--dim)}
+  .cs-trigger:hover:after{border-top-color:var(--muted)}
+  .cs-pop{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:85;background:var(--surface);border:1px solid var(--border);
+    border-radius:10px;padding:5px;max-height:300px;overflow:auto;box-shadow:0 14px 36px rgba(0,0,0,.55)}
+  .cs-pop.up{top:auto;bottom:calc(100% + 6px)}
+  .cs-opt{padding:9px 11px;border-radius:7px;cursor:pointer;font-size:14px;color:var(--muted);white-space:nowrap}
+  .cs-opt:hover{background:var(--surface-2);color:#fff}
+  .cs-opt.on{color:#fff;background:rgba(240,82,61,.16)}
+  .dp-trigger:hover{border-color:var(--dim)}
+  .dp-trigger.placeholder{color:var(--dim)}
+  .dp-pop{position:absolute;top:calc(100% + 6px);left:0;z-index:80;width:266px;background:var(--surface);
+    border:1px solid var(--border);border-radius:12px;padding:12px;box-shadow:0 14px 36px rgba(0,0,0,.55)}
+  .dp-pop.right{left:auto;right:0}
+  .dp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .dp-title{font-family:'Space Grotesk';font-weight:700;font-size:14px}
+  .dp-nav{width:30px;height:30px;border-radius:8px;border:1px solid var(--border);background:var(--near-black);color:var(--muted);cursor:pointer;font-size:15px}
+  .dp-nav:hover{color:#fff;border-color:var(--dim)}
+  .dp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+  .dp-dow{font-size:10px;color:var(--dim);text-align:center;padding:4px 0;text-transform:uppercase;font-weight:700}
+  .dp-day{height:32px;display:flex;align-items:center;justify-content:center;font-size:13px;border-radius:8px;cursor:pointer;color:var(--muted);border:1px solid transparent}
+  .dp-day:hover{background:var(--surface-2);color:#fff}
+  .dp-day.out{visibility:hidden}
+  .dp-day.today{border-color:var(--orange);color:#fff}
+  .dp-day.sel{background:var(--orange);color:#fff;font-weight:700}
+  .dp-foot{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+  .dp-foot button{font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:'Space Grotesk';font-weight:600}
+  .dp-foot button:hover{color:#fff}
+
+  /* Customer autocomplete (booking sheet) */
+  .ac-wrap{position:relative}
+  .ac-pop{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:90;background:var(--surface-2);
+    border:1px solid var(--border);border-radius:10px;overflow:hidden auto;max-height:230px;box-shadow:0 14px 36px rgba(0,0,0,.55)}
+  .ac-item{padding:9px 12px;cursor:pointer;font-size:14px;display:flex;flex-direction:column;gap:1px;border-bottom:1px solid var(--border)}
+  .ac-item:last-child{border-bottom:none}
+  .ac-item:hover{background:var(--near-black)}
+  .ac-item .ac-sub{font-size:12px;color:var(--dim)}
+  .ac-add{color:var(--orange);font-weight:700}
+
+  /* Price template cards */
+  .ptpl{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--near-black);border:1px solid var(--border);
+    border-radius:12px;padding:16px 20px;margin-bottom:14px}
+  .ptpl:last-child{margin-bottom:0}
+  .ptpl-info{flex:1;min-width:260px}
+  .ptpl-name{font-family:'Space Grotesk';font-weight:700;font-size:16.5px;margin-bottom:5px}
+  .ptpl-rates{font-size:13px;color:var(--dim)}
+  .ptpl-rates b{color:var(--muted);font-weight:700}
+  .ptpl-note{font-size:12.5px;color:var(--orange);font-style:italic;margin-top:5px}
+  .ptpl-actions{display:flex;gap:8px;align-items:center;flex:none}
+
+  /* Bay picker chips (price templates) */
+  .bay-pick{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+  .bp{font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:var(--near-black);color:var(--muted);cursor:pointer;font-family:'Space Grotesk'}
+  .bp.on{border-color:var(--orange);color:#fff;background:var(--surface-2)}
+
+  /* Bookings / logs table */
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:8px 10px;border-bottom:1px solid var(--border)}
+  td{padding:10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:hover td{background:rgba(255,255,255,.02)}
+  .pill{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .pill.confirmed{background:rgba(78,192,106,.14);color:#7ad492;border:1px solid rgba(78,192,106,.4)}
+  .pill.blocked{background:rgba(240,82,61,.12);color:#e0796f;border:1px solid rgba(240,82,61,.4)}
+  .pill.cancelled{background:#1a1a1a;color:var(--dim);border:1px solid var(--border)}
+  .pill.online{background:var(--surface-2);color:var(--muted);border:1px solid var(--border)}
+  .pill.manager{background:rgba(196,229,56,.10);color:#c4e538;border:1px solid rgba(196,229,56,.35)}
+  .tagpill{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;margin:1px 2px 1px 0;border:1px solid}
+  .empty{color:var(--dim);text-align:center;padding:30px 0;font-size:14px}
+  .hidden{display:none!important}
+  .tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .logs-filters{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end;margin-bottom:16px}
+  @media(max-width:820px){.logs-filters{grid-template-columns:1fr 1fr}}
+
+  /* Schedule grid */
+  .bk-head{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:8px}
+  .day-nav .input{width:160px}
+  .day-label{font-family:'Space Grotesk';font-weight:700;font-size:16px;margin:6px 0 14px}
+  .legend2{display:flex;gap:18px;font-size:12px;color:var(--dim);margin-bottom:16px}
+  .legend2 span{display:inline-flex;align-items:center;gap:7px}
+  .sw{width:12px;height:12px;border-radius:4px;display:inline-block;border:1px solid var(--border)}
+  .sw.avail{background:var(--near-black);border-color:var(--orange-dim)}
+  .sw.booked{background:rgba(78,192,106,.16);border-color:#4ec06a}
+  .sw.blocked{background:rgba(240,82,61,.14);border-color:var(--orange);border-style:dashed}
+  .grid-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .bkgrid{width:100%;min-width:660px;border-collapse:separate;border-spacing:5px}
+  .bkgrid th{font-family:'Space Grotesk';font-weight:700;font-size:12.5px;color:#fff;padding:2px 4px 8px;vertical-align:bottom;text-align:center}
+  .bkgrid th small{display:block;font-family:'Raleway';font-weight:500;font-size:10.5px;color:var(--dim);margin-top:2px}
+  .bkgrid th.t{width:62px}
+  .bkgrid td.t{font-family:'Space Grotesk';font-weight:700;font-size:12px;color:var(--muted);text-align:right;padding-right:8px;white-space:nowrap;width:62px}
+  .cell{border:1px solid var(--border);border-radius:9px;background:var(--near-black);text-align:center;padding:8px 4px;cursor:pointer;font-size:12px;line-height:1.15;transition:.12s;vertical-align:middle}
+  .cell.open{color:var(--dim)}
+  .cell.open:hover{border-color:var(--orange);color:var(--orange)}
+  /* Priced open cells (green by default; painted statuses use their own colour via --sc) */
+  .cell.open.sprice{padding:7px 4px}
+  .cell.open.sprice:hover{border-color:var(--sc)!important;box-shadow:0 0 0 1px var(--sc) inset}
+  .cell.open.sprice .price{font-family:'Space Grotesk';font-weight:700;font-size:13.5px}
+  .cell.open.sprice .per{font-size:10px;opacity:.7;margin-left:1px}
+  .cell.open.sprice .slbl{display:block;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-top:2px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Closed status cells — coloured, no price, not bookable */
+  .cell.shut{cursor:default}
+  .cell.shut .nm{display:block;font-weight:700;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cell.bk{background:rgba(78,192,106,.12);border-color:rgba(78,192,106,.45);color:#9fe0b0}
+  .cell.bl{background:rgba(240,82,61,.10);border-color:rgba(240,82,61,.45);border-style:dashed;color:#e0796f}
+  .cell .nm{display:block;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cell .cont{opacity:.5}
+  .cell .cmeta{display:flex;gap:4px;justify-content:center;align-items:center;flex-wrap:nowrap;overflow:hidden;margin-top:4px;max-width:100%}
+  .cell .stl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 6px;border-radius:999px;line-height:1.5;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}
+  .stl-more{background:var(--surface-2);color:var(--muted);border:1px solid var(--border);flex:none!important}
+  .cell .tgs{display:inline-flex;gap:3px;align-items:center}
+  .cell .tg{width:7px;height:7px;border-radius:50%;display:inline-block;flex:none}
+  .cell .bnote{display:block;font-size:9.5px;color:var(--muted);margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;font-style:italic}
+  .li .cmeta{display:inline-flex;gap:4px;align-items:center;margin-left:6px;vertical-align:middle}
+  .li .bnote{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;font-style:italic}
+  .closed-note{color:var(--dim);text-align:center;padding:26px 0;font-size:14px}
+  .cell.closed{opacity:.16;cursor:default;background:transparent;border-style:dashed}
+  .cell.closed:hover{border-color:var(--border)}
+  .cell[draggable="true"]{cursor:grab}
+  .cell[draggable="true"]:active{cursor:grabbing}
+  .cell.drag-src{opacity:.35}
+  .cell.drop-ok{border-color:var(--orange)!important;border-style:solid!important;background:rgba(240,82,61,.18)!important;color:var(--orange)}
+  .bkgrid th.hold-col{color:var(--orange)}
+  .bkgrid th.hold-col small{color:var(--orange-dim)}
+  .cell.holdcell{background:rgba(240,82,61,.05)}
+  .cell.holdcell.open{border-style:dashed;border-color:var(--orange-dim);color:var(--orange-dim)}
+  /* Schedule-override tiles (blocked time with a reason, like GolfBooking's black "Break" tiles) */
+  .cell.ovr{background:#050505;border-color:#3d3d3d;cursor:pointer}
+  .cell.ovr .nm{color:#e8e8e8;font-weight:700;font-size:11.5px}
+  .cell.ovr:hover{border-color:var(--dim)}
+  .seg-sm button{padding:7px 12px;font-size:13px}
+  /* Day grid + side list */
+  .day-layout{display:grid;grid-template-columns:1fr;gap:18px;align-items:start;margin-bottom:18px}
+  /* At a glance — horizontal strip below the stats */
+  .glance{display:flex;gap:12px;overflow-x:auto;padding-bottom:4px}
+  .glance .empty{padding:6px 0}
+  .gcard{flex:0 0 auto;min-width:190px;max-width:240px;background:var(--near-black);border:1px solid var(--border);
+    border-radius:12px;padding:12px 14px;cursor:pointer;transition:.12s}
+  .gcard:hover{border-color:var(--dim)}
+  .gcard.bl{border-color:rgba(240,82,61,.4)}
+  .gcard .g-t{display:flex;align-items:center;gap:8px;font-family:'Space Grotesk';font-weight:700;font-size:13px}
+  .gcard .g-t .dot{width:8px;height:8px;border-radius:50%;flex:none}
+  .gcard .dot.bk{background:#4ec06a}.gcard .dot.bl{background:var(--orange)}
+  .gcard .g-s{font-size:12px;color:var(--dim);margin:3px 0 6px}
+  .gcard .cmeta{display:flex;gap:4px;flex-wrap:wrap}
+  .gcard .stl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;padding:1px 6px;border-radius:999px;line-height:1.6;white-space:nowrap;max-width:140px;overflow:hidden;text-overflow:ellipsis}
+  .gcard .bnote{display:block;font-size:11px;color:var(--muted);font-style:italic;margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ovr-banner{background:rgba(240,82,61,.10);border:1px solid rgba(240,82,61,.4);color:#e0796f;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:14px}
+  /* Weekly status editor */
+  .wk-row{display:grid;grid-template-columns:88px 210px 1fr;gap:14px;align-items:start;padding:13px 0;border-top:1px solid var(--border)}
+  .wk-row:first-child{border-top:none}
+  .wk-day{font-family:'Space Grotesk';font-weight:700;font-size:13.5px;padding-top:9px}
+  .wk-def label{display:block;font-size:11px;color:var(--dim);margin-bottom:4px}
+  .wk-bandwrap{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding-top:1px}
+  .wk-bands{display:flex;flex-direction:column;gap:8px;width:100%}
+  .wk-band{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .wk-band .input{max-width:160px}
+  .wk-band .wk-b-from,.wk-band .wk-b-to{max-width:120px}
+  .wk-dash{color:var(--dim)}
+  .ap-dot{width:18px;height:18px;border-radius:5px;border:1px solid var(--border);flex:none;display:inline-block}
+
+  /* Slot sheet (add / manage) */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:none;place-items:center;z-index:50;padding:20px}
+  .overlay.show{display:grid}
+  .sheet{width:100%;max-width:560px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px 30px;position:relative;max-height:90vh;overflow-y:auto}
+  #confirm-sheet{max-width:400px}
+  /* Reservation details — wide two-column layout (~2/3 of the page) */
+  .sheet.res-wide{max-width:min(1100px,66vw)}
+  .res-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 34px}
+  .res-col{min-width:0}
+  @media(max-width:820px){ .sheet.res-wide{max-width:560px} .res-grid{grid-template-columns:1fr;gap:0} }
+  .sheet h3{font-size:19px;margin-bottom:4px}
+  .sheet .sub{color:var(--dim);font-size:13px;margin-bottom:16px}
+  .sheet .field{margin-bottom:12px}
+  .sheet-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--near-black);color:var(--muted);cursor:pointer}
+  .seg{display:flex;gap:8px}
+  .seg button{flex:1;padding:10px;border-radius:9px;border:1px solid var(--border);background:var(--near-black);color:var(--muted);cursor:pointer;font-weight:600;font-family:'Space Grotesk';font-size:14px}
+  .seg button.on{border-color:var(--orange);color:#fff;background:var(--surface-2)}
+  .time-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .static-val{height:44px;display:flex;align-items:center;padding:0 12px;background:var(--near-black);border:1px solid var(--border);border-radius:9px;color:var(--muted);font-size:14px}
+  .kv{display:flex;justify-content:space-between;padding:7px 0;font-size:14px;border-bottom:1px solid var(--border)}
+  .kv .k{color:var(--muted)}
+  .pay-box{background:var(--near-black);border:1px solid var(--border);border-radius:10px;padding:4px 14px;margin-top:8px}
+  .pay-box .kv:last-child{border-bottom:none}
+  .sec-h{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.09em;font-weight:700;font-family:'Space Grotesk';margin:18px 0 4px}
+  .txn{background:var(--near-black);border:1px solid var(--border);border-radius:10px;padding:4px 14px;margin-top:4px}
+  .txn-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:9px 0}
+  .rep{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(196,229,56,.12);color:#c4e538;border:1px solid rgba(196,229,56,.35);margin-left:6px;vertical-align:middle}
+
+  /* Amber review badge with a custom hover tooltip (imported data that needs a look) */
+  .fbadge{position:relative;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex:none;
+    border-radius:50%;background:rgba(240,151,61,.15);border:1px solid rgba(240,151,61,.55);color:#f0973d;
+    font-size:11px;font-weight:700;font-family:'Space Grotesk';cursor:help;margin-left:6px;vertical-align:middle}
+  .fbadge::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+    width:260px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;
+    color:var(--muted);font-family:'Raleway';font-weight:500;font-size:12px;line-height:1.5;text-align:left;
+    opacity:0;pointer-events:none;transition:opacity .12s;z-index:95;box-shadow:0 10px 28px rgba(0,0,0,.5);white-space:normal}
+  .fbadge:hover::after{opacity:1}
+  .exp{font-size:11.5px;color:var(--dim)}
+  .exp.soon{color:#f0973d}
+  .exp.expired{color:var(--danger)}
+  .wv-code{font-family:'Space Grotesk';font-size:12px;letter-spacing:.04em}
+  .note-flag{display:flex;gap:9px;align-items:flex-start;background:rgba(240,151,61,.08);border:1px solid rgba(240,151,61,.35);
+    border-radius:10px;padding:10px 12px;font-size:12.5px;color:#e8b98a;line-height:1.5;margin:2px 0 12px}
+  .note-flag .fbadge{margin:1px 0 0}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12.5px;font-weight:700;padding:6px 11px;border-radius:999px;border:1px solid var(--border);background:var(--near-black);color:var(--muted);cursor:pointer}
+  .chip.on{color:#fff;background:var(--surface-2)}
+
+  /* Demo-only view switcher */
+  .view-switch{position:fixed;bottom:18px;right:18px;z-index:9999;display:flex;align-items:center;gap:6px;
+    background:rgba(20,20,20,.92);border:1px solid #333;border-radius:999px;padding:6px 8px;
+    backdrop-filter:blur(8px);box-shadow:0 6px 24px rgba(0,0,0,.45);font-family:'Space Grotesk',sans-serif;}
+  .view-switch .vs-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#7A7A7A;padding:0 6px;}
+  .view-switch .vs-btn{font-size:13px;font-weight:700;color:#B5B5B5;text-decoration:none;padding:6px 14px;border-radius:999px;transition:.15s;}
+  .view-switch .vs-btn:hover{color:#fff;}
+  .view-switch .vs-btn.active{background:#F0523D;color:#fff;}
+</style>
+</head>
+<body>
+
+<!-- Demo-only view switcher -->
+<div class="view-switch" aria-label="Switch view (demo only)">
+  <span class="vs-label">View</span>
+  <a href="/" class="vs-btn">Client</a>
+  <a href="/admin" class="vs-btn active">Manager</a>
+</div>
+
+<div id="app-login" class="login-wrap hidden">
+  <div class="login">
+    <div class="tag">Joy House Golf</div>
+    <h1>Manager sign in</h1>
+    <div class="sub">Enter your email and password to manage bookings &amp; settings.</div>
+    <input class="input" id="login-email" type="email" placeholder="Email" autocomplete="username" />
+    <input class="input" id="login-pass" type="password" placeholder="Password" autocomplete="current-password" />
+    <button class="btn btn-primary" id="login-btn" style="width:100%">Sign in</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<div id="app-loading" class="login-wrap"><div class="dim">Loading…</div></div>
+
+<div id="app-main" class="hidden">
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="side-brand"><span class="o">JOY</span> HOUSE GOLF<span class="side-sub">Manager</span></div>
+      <nav class="side-nav">
+        <div class="side-cap">Operations</div>
+        <div class="tab active" data-tab="bookings">Tee Sheet</div>
+        <div class="tab" data-tab="membership">Members</div>
+        <div class="tab" data-tab="logs">Booking Logs</div>
+        <div class="tab" data-tab="customers">Search Customers</div>
+        <div class="side-cap">Configuration</div>
+        <div class="tab" data-tab="bays">Bays</div>
+        <div class="tab" data-tab="prices">Prices</div>
+        <div class="tab" data-tab="overrides">Schedule Overrides</div>
+        <div class="tab" data-tab="templates">Schedule Templates</div>
+        <div class="tab" data-tab="statuses">Statuses</div>
+        <div class="tab" data-tab="tags">Tags</div>
+        <div class="tab" data-tab="paysettings">Payment Settings</div>
+      </nav>
+      <div class="side-foot">
+        <div class="who" id="who"></div>
+        <a class="btn btn-ghost btn-sm" href="/" style="text-decoration:none">View booking site ↗</a>
+        <button class="btn btn-ghost btn-sm" id="logout-btn">Sign out</button>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- SCHEDULE -->
+      <div id="tab-bookings">
+        <div class="toolbar">
+          <div>
+            <h2>Tee Sheet</h2>
+            <div class="day-label" id="day-label"></div>
+          </div>
+          <div class="day-nav">
+            <div class="seg seg-sm" id="view-toggle">
+              <button data-v="day" class="on">Day</button>
+              <button data-v="week">Week</button>
+            </div>
+            <select class="input" id="week-bay" style="width:auto;display:none"></select>
+            <button class="btn btn-ghost btn-sm" id="day-prev" title="Previous">‹</button>
+            <input class="input" id="bk-date" type="date" />
+            <button class="btn btn-ghost btn-sm" id="day-next" title="Next">›</button>
+            <button class="btn btn-ghost btn-sm" id="day-today">Today</button>
+            <button class="btn btn-primary btn-sm" id="apply-status">Apply status</button>
+          </div>
+        </div>
+
+        <div id="ovr-banner-host"></div>
+
+        <div class="stats">
+          <div class="stat"><div class="stat-n" id="stat-booked">0</div><div class="stat-l">Bookings</div></div>
+          <div class="stat"><div class="stat-n" id="stat-blocked">0</div><div class="stat-l">Blocked</div></div>
+          <div class="stat"><div class="stat-n" id="stat-rev">$0</div><div class="stat-l">Paid online</div></div>
+        </div>
+
+        <div class="card glance-card" id="day-list-card" style="margin-bottom:18px">
+          <h3 class="card-h">At a glance</h3>
+          <div class="glance" id="day-list"></div>
+        </div>
+
+        <div class="day-layout" id="day-layout">
+          <div class="card" style="margin-bottom:0">
+            <div class="legend2">
+              <span><i class="sw avail"></i> Open (shows $/hr)</span>
+              <span><i class="sw booked"></i> Booked</span>
+              <span><i class="sw" style="background:rgba(255,91,91,.16);border-color:#ff5b5b"></i> Closed / status</span>
+              <span class="hint">Set the usual week in Schedule Templates · use “Apply status” for a one-off day · tap a slot to add · drag a booking to move it</span>
+            </div>
+            <div class="grid-scroll"><div id="bk-grid"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOOKING LOGS -->
+      <div id="tab-logs" class="hidden">
+        <div class="toolbar">
+          <div><h2>Booking Logs</h2><div class="day-label">Full history across every bay — filter, search and review.</div></div>
+          <div class="day-nav"><button class="btn btn-ghost btn-sm" id="logs-export">Export CSV</button></div>
+        </div>
+        <div class="card">
+          <div class="logs-filters">
+            <div><label>From</label><input class="input" id="lg-from" type="date" /></div>
+            <div><label>To</label><input class="input" id="lg-to" type="date" /></div>
+            <div><label>Status</label><select class="input" id="lg-status">
+              <option value="">All</option><option value="confirmed">Confirmed</option>
+              <option value="blocked">Blocked</option><option value="cancelled">Cancelled</option></select></div>
+            <div><label>Bay</label><select class="input" id="lg-bay"><option value="">All bays</option></select></div>
+            <div><label>Search</label><input class="input" id="lg-q" placeholder="Name / contact" /></div>
+          </div>
+          <div class="tbl-scroll"><table id="logs-table"></table></div>
+        </div>
+      </div>
+
+      <!-- CUSTOMERS -->
+      <div id="tab-customers" class="hidden">
+        <div class="toolbar">
+          <div><h2>Search Customers</h2><div class="day-label">Everyone who's booked or joined — search, edit, assign a membership.</div></div>
+          <div class="day-nav">
+            <input class="input" id="cu-q" placeholder="Search name / email / phone" style="width:220px" />
+            <button class="btn btn-ghost btn-sm" id="cu-import" title="Create customer records from existing bookings">Import from bookings</button>
+            <button class="btn btn-primary" id="cu-add">+ Add customer</button>
+          </div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-n" id="cu-total">0</div><div class="stat-l">Customers</div></div>
+          <div class="stat"><div class="stat-n" id="cu-members">0</div><div class="stat-l">Members</div></div>
+          <div class="stat"><div class="stat-n" id="cu-visits">0</div><div class="stat-l">Total bookings</div></div>
+        </div>
+        <div class="card"><div class="tbl-scroll"><table id="cu-table"></table></div></div>
+      </div>
+
+      <!-- MEMBERSHIP -->
+      <div id="tab-membership" class="hidden">
+        <div class="toolbar">
+          <div><h2>Members</h2><div class="day-label">Membership plans and the customers enrolled in each.</div></div>
+          <div class="day-nav"><button class="btn btn-primary" id="add-plan">+ Add plan</button></div>
+        </div>
+        <div id="plans-list"></div>
+        <div class="card">
+          <div class="row" style="align-items:center;margin-bottom:4px">
+            <div><h3 class="card-h">Members</h3>
+              <div class="sub" style="margin:0">Customers currently on a plan. Click a member to edit their plan or expiry.</div></div>
+            <button class="btn btn-primary btn-sm" id="add-member" style="margin-left:auto">+ Add member</button>
+          </div>
+          <div class="tbl-scroll" style="margin-top:12px"><table id="members-table"></table></div>
+        </div>
+      </div>
+
+      <!-- BAYS -->
+      <div id="tab-bays" class="hidden">
+        <div class="toolbar">
+          <div><h2>Bays</h2><div class="day-label">Rename bays, assign a category, add or remove. Saves live to the booking site.</div></div>
+          <div class="day-nav"><span class="dim" id="bays-saved" style="font-size:12px"></span><button class="btn btn-primary" id="save-bays">Save bays</button></div>
+        </div>
+        <div class="card">
+          <div id="bays-list"></div>
+          <button class="btn btn-ghost btn-sm" id="add-bay-row">+ Add bay</button>
+        </div>
+
+        <div class="card">
+          <div class="row" style="align-items:center;margin-bottom:14px">
+            <div>
+              <h3 class="card-h">Bay categories</h3>
+              <div class="sub" style="margin:0">Simulator / room types (TrackMan, Uneekor…) shown above in the Category dropdown.</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="add-category" style="margin-left:auto">+ Add category</button>
+          </div>
+          <div id="cats-list"></div>
+        </div>
+      </div>
+
+      <!-- PRICES -->
+      <div id="tab-prices" class="hidden">
+        <div class="toolbar">
+          <div><h2>Prices</h2><div class="day-label">Set your standard rates, save them as templates, and apply a template anytime.</div></div>
+        </div>
+
+        <!-- 1) Overview: what each bay charges right now -->
+        <div class="card">
+          <h3 class="card-h">What each bay charges now</h3>
+          <div class="sub">Live per-bay pricing. Bays without their own price use the standard rates.</div>
+          <div class="tbl-scroll"><table id="price-overview"></table></div>
+        </div>
+
+        <!-- 2) Standard rate editor -->
+        <div class="card">
+          <div class="row" style="align-items:center;margin-bottom:4px">
+            <div><h3 class="card-h">Standard rates ($/hr)</h3>
+              <div class="sub" style="margin:0">Price by time of day. Each block sets the $/hr from its start until the next block.</div></div>
+            <div style="margin-left:auto;display:flex;gap:10px;align-items:center">
+              <span class="dim" id="prices-saved" style="font-size:12px"></span>
+              <button class="btn btn-ghost btn-sm" id="save-season">Save as template</button>
+              <button class="btn btn-primary btn-sm" id="save-prices">Save prices</button>
+            </div>
+          </div>
+          <div class="band-head"><span>Starts at</span><span>Weekday $/hr</span><span>Weekend $/hr</span><span></span></div>
+          <div id="bands-list"></div>
+          <button class="btn btn-ghost btn-sm" id="add-band" style="margin-top:4px">+ Add time block</button>
+          <div class="grid2" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+            <div class="field" style="margin-bottom:0"><label>Minimum booking</label>
+              <select class="input" id="r-min"><option value="30">30 min</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select>
+            </div>
+            <div class="field" style="margin-bottom:0"><label>Max players / bay</label><input class="input" id="r-party" type="number" min="1" max="12" /></div>
+          </div>
+          <div class="field" style="margin:14px 0 0">
+            <label>Customer note (optional) — shown on the booking page</label>
+            <input class="input" id="r-note" placeholder="e.g. Father's Day weekend — discounted rates on all bays!" maxlength="160" />
+          </div>
+
+          <div style="border-top:1px solid var(--border);margin:20px 0 16px"></div>
+
+          <div class="row" style="align-items:center;gap:10px;margin-bottom:4px">
+            <div><h3 class="card-h" style="margin:0">Deposit &amp; payment</h3>
+              <div class="sub" style="margin:0">How much customers pay or hold when they book online.</div></div>
+          </div>
+          <div class="row" style="align-items:center;gap:10px;margin:14px 0 4px">
+            <label class="switch" style="margin:0"><input type="checkbox" id="d-accept" /><span class="track"></span></label>
+            <span class="muted" style="font-size:14px">Accept a deposit / hold on online bookings</span>
+          </div>
+          <div id="dep-fields">
+            <div class="grid3">
+              <div class="field"><label>Capture method</label>
+                <select class="input" id="d-capture"><option>Credit Card Hold</option><option>Payment Upfront</option><option>No Payment</option></select></div>
+              <div class="field"><label>Charge percentage (%)</label><input class="input" id="d-pct" type="number" min="0" max="100" placeholder="e.g. 50" /></div>
+              <div class="field"><label>Flat charge amount ($)</label><input class="input" id="d-amt" type="number" min="0" placeholder="Optional — overrides %" /></div>
+            </div>
+            <div class="grid2">
+              <div class="field" style="margin-bottom:0"><label>Charge transaction fee back to customer</label>
+                <select class="input" id="d-chargeback"><option value="no">No</option><option value="yes">Yes</option></select></div>
+              <div class="field" style="margin-bottom:0"><label style="visibility:hidden">x</label><div class="pay-box" style="margin:0"><div class="kv" style="border:none"><span class="k">Example deposit</span><span id="dep-example">—</span></div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3) Templates -->
+        <div class="card">
+          <h3 class="card-h">Price templates</h3>
+          <div class="sub">Saved price lists (Summer, Winter, Holiday…). Apply one to update your live prices.</div>
+          <div id="ptpl-list"></div>
+        </div>
+      </div>
+
+      <!-- SCHEDULE OVERRIDES -->
+      <div id="tab-overrides" class="hidden">
+        <div class="toolbar">
+          <div><h2>Schedule Overrides</h2><div class="day-label">Close days, change hours, or block out time on specific bays — with a reason shown on the tee sheet.</div></div>
+        </div>
+        <div class="card">
+          <h3 class="card-h">Add an override</h3>
+          <div class="grid3">
+            <div class="field"><label>Type</label><select class="input" id="ov-type">
+              <option value="block">Block a time range</option>
+              <option value="closed">Closed all day</option>
+              <option value="hours">Special hours (whole venue)</option></select></div>
+            <div class="field"><label>Start date</label><input class="input" id="ov-date" type="date" /></div>
+            <div class="field"><label>End date (optional)</label><input class="input" id="ov-end" type="date" /></div>
+          </div>
+          <div class="field"><label>Reason — shown on the tee sheet</label><input class="input" id="ov-note" placeholder="e.g. Break, Maintenance, Christmas Day" maxlength="80" /></div>
+          <div class="grid2" id="ov-hours-wrap" style="display:none">
+            <div class="field"><label>Opens at</label><select class="input" id="ov-open"></select></div>
+            <div class="field"><label>Closes at</label><select class="input" id="ov-close"></select></div>
+          </div>
+          <div class="grid2" id="ov-block-wrap" style="display:none">
+            <div class="field"><label>From</label><select class="input" id="ov-bstart"></select></div>
+            <div class="field"><label>To</label><select class="input" id="ov-bend"></select></div>
+          </div>
+          <div class="field" id="ov-bays-row"><label>Affected bays</label><div class="bay-pick" id="ov-bays"></div></div>
+          <div class="save-bar"><button class="btn btn-primary" id="ov-add">Add override</button></div>
+        </div>
+        <div class="card">
+          <h3 class="card-h">Upcoming &amp; recent</h3>
+          <div class="tbl-scroll"><table id="ov-table"></table></div>
+        </div>
+      </div>
+
+      <!-- SCHEDULE TEMPLATES -->
+      <div id="tab-templates" class="hidden">
+        <div class="toolbar">
+          <div><h2>Schedule Templates</h2><div class="day-label">Default weekly hours, plus reusable presets you can apply in one click.</div></div>
+          <div class="day-nav"><span class="dim" id="tpl-saved" style="font-size:12px"></span><button class="btn btn-primary" id="save-hours">Save weekly hours</button></div>
+        </div>
+        <div class="card">
+          <h3 class="card-h">Active weekly hours</h3>
+          <div class="sub">Open and close hour per weekday (24-hour). Set both to 0 to mark closed.</div>
+          <div id="hours-list"></div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px">
+            <div><h3 class="card-h" style="margin-bottom:2px">Weekly tee-sheet status</h3>
+              <div class="sub">The status painted across all bays each weekday. Leave it on <b>Open</b> for a normal day; add time bands to vary within a day (e.g. Happy Hour 5–7pm). For a one-off day, use <b>Apply status</b> on the tee sheet.</div></div>
+            <button class="btn btn-primary btn-sm" id="save-weekly-status">Save weekly status</button>
+          </div>
+          <div id="weekly-status-editor" style="margin-top:14px"></div>
+        </div>
+        <div class="card">
+          <h3 class="card-h">Saved templates</h3>
+          <div class="sub">Save the current weekly hours as a named preset, or apply one to make it active.</div>
+          <div class="row" style="margin-bottom:14px">
+            <input class="input" id="tpl-name" placeholder="Template name (e.g. Summer hours)" style="max-width:280px" />
+            <button class="btn btn-ghost btn-sm" id="tpl-save">Save current as template</button>
+          </div>
+          <div id="tpl-list"></div>
+        </div>
+      </div>
+
+      <!-- STATUSES -->
+      <div id="tab-statuses" class="hidden">
+        <div class="toolbar">
+          <div><h2>Statuses</h2><div class="day-label">Colour-coded labels for the tee sheet — booking workflow states and schedule states.</div></div>
+        </div>
+        <div class="card">
+          <div class="sec-head">
+            <div><h3 class="sec-title">Schedule statuses</h3><div class="sub" style="margin:2px 0 0">Applied to the tee sheet or a schedule override — each is either Open or Closed.</div></div>
+            <button class="btn btn-ghost btn-sm" id="add-schedule-status">+ Add schedule status</button>
+          </div>
+          <div id="schedule-statuses-list"></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="sec-head">
+            <div><h3 class="sec-title">Booking statuses</h3><div class="sub" style="margin:2px 0 0">Applied to a reservation as it moves through its lifecycle.</div></div>
+            <button class="btn btn-ghost btn-sm" id="add-booking-status">+ Add booking status</button>
+          </div>
+          <div id="booking-statuses-list"></div>
+        </div>
+      </div>
+
+      <!-- TAGS -->
+      <div id="tab-tags" class="hidden">
+        <div class="toolbar">
+          <div><h2>Tags</h2><div class="day-label">Free-form labels you can attach to bookings.</div></div>
+          <div class="day-nav"><button class="btn btn-primary" id="add-tag">+ Add tag</button></div>
+        </div>
+        <div class="card"><div id="tags-list"></div></div>
+      </div>
+
+      <!-- PAYMENT SETTINGS -->
+      <div id="tab-paysettings" class="hidden">
+        <div class="toolbar">
+          <div><h2>Payment Settings</h2><div class="day-label">How deposits, holds and taxes are handled at checkout.</div></div>
+          <div class="day-nav"><span class="dim" id="pay-saved" style="font-size:12px"></span><button class="btn btn-primary" id="save-pay">Update payment settings</button></div>
+        </div>
+        <div class="grid2" style="align-items:start">
+          <div>
+            <div class="card">
+              <h3 class="card-h">Processor</h3>
+              <div class="sub">This prototype uses Stripe in test mode — no real cards are ever charged.</div>
+              <div class="row" style="align-items:center;gap:10px">
+                <span class="pill confirmed" id="pay-proc-pill">Stripe · test mode</span>
+                <label class="switch" style="margin-left:auto"><input type="checkbox" id="p-accept" /><span class="track"></span></label>
+                <span class="muted" style="font-size:13px">Accept payments</span>
+              </div>
+            </div>
+            <div class="card">
+              <h3 class="card-h">Charges</h3>
+              <div class="grid2">
+                <div class="field"><label>Tax %</label><input class="input" id="p-tax" type="number" min="0" step="0.1" /><div class="dim" style="font-size:12px;margin-top:6px">Applied on top of the sub-total.</div></div>
+                <div class="field"><label>Currency</label><select class="input" id="p-currency"><option>CAD</option><option>USD</option></select></div>
+              </div>
+              <div class="grid2">
+                <div class="field"><label>Capture method</label><select class="input" id="p-capture"><option>Credit Card Hold</option><option>Payment Upfront</option><option>No Payment</option></select></div>
+                <div class="field"><label>Priority capture</label><select class="input" id="p-priority"><option>No Payment</option><option>Credit Card Hold</option><option>Payment Upfront</option></select></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h3 class="card-h">Disclaimers</h3>
+            <div class="sub">Shown above the card form at checkout.</div>
+            <div class="field"><label>Hold disclaimer</label><textarea class="input" id="p-hold" rows="3"></textarea></div>
+            <div class="field"><label>Payment disclaimer</label><textarea class="input" id="p-pay" rows="3"></textarea></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="overlay" id="slot-overlay"><div class="sheet" id="slot-sheet"></div></div>
+<div class="overlay" id="cust-overlay" style="z-index:70"><div class="sheet" id="cust-sheet"></div></div>
+<div class="overlay" id="px-overlay" style="z-index:70"><div class="sheet" id="px-sheet"></div></div>
+<div class="overlay" id="confirm-overlay" style="z-index:80"><div class="sheet" id="confirm-sheet" style="max-width:380px"></div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const DOW = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+let sb = null;          // supabase client
+let SETTINGS = null;    // current settings row
+let CATEGORIES = [];    // bay_categories
+let STATUSES = [];      // booking_statuses
+let TAGS = [];          // tags
+let MEMBERSHIPS = [];   // membership plans
+let CUSTOMERS = [];     // customer database
+let CUST_STATS = {};    // { 'email|phone key': {count, last} } derived from bookings
+let OVERRIDES = [];      // active schedule overrides that touch the visible range
+
+const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtMin = m => { if(m>=1440) return 'Midnight'; let h=Math.floor(m/60),mm=m%60,ap=h<12?'AM':'PM',hh=h%12||12; return hh+':'+String(mm).padStart(2,'0')+' '+ap; };
+function toast(msg, kind){ const t=$('#toast'); t.textContent=msg; t.className='toast show '+(kind||''); setTimeout(()=>t.className='toast '+(kind||''),2600); }
+function hourOptions(sel){ let o=''; for(let h=0;h<=24;h++){ const lbl=h===24?'Midnight':h===0?'Midnight':fmtMin(h*60); o+=`<option value="${h}" ${h===sel?'selected':''}>${lbl} (${h})</option>`; } return o; }
+
+/* ---------- Auth / boot ---------- */
+async function boot(){
+  let cfg;
+  try{ cfg = await (await fetch('/api/config')).json(); }catch(e){ cfg = {}; }
+  if(!cfg.supabase){
+    $('#app-loading').innerHTML='<div class="login"><h1>Not configured</h1><div class="sub">Supabase isn\'t set up on the server yet.</div></div>';
+    return;
+  }
+  sb = supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey,
+    { auth:{ persistSession:true, autoRefreshToken:true } });
+  // If the session is signed out (or a refresh fails), drop cleanly to the login screen.
+  sb.auth.onAuthStateChange((event)=>{ if(event==='SIGNED_OUT') showLogin(); });
+  // Coming back to the tab after the laptop slept: refresh the token before any query runs.
+  document.addEventListener('visibilitychange', async ()=>{
+    if(document.visibilityState!=='visible' || !sb) return;
+    const { data } = await sb.auth.getSession();
+    if(!data.session) return;                 // not logged in here; login screen already handles it
+    if(typeof refreshActiveTab==='function') refreshActiveTab();
+  });
+  const { data:{ session } } = await sb.auth.getSession();
+  session ? showApp(session) : showLogin();
+}
+
+// Re-run whichever tab is open (used after a token refresh on tab focus).
+function refreshActiveTab(){
+  const active=document.querySelector('.tab.active'); const id=active&&active.dataset.tab;
+  if(id==='bookings') loadSchedule(); else if(id && TAB_LOADERS[id]) TAB_LOADERS[id]();
+}
+
+// Detect an expired-session error from any Supabase call; if so, send the user to re-login.
+function isAuthError(error){
+  if(!error) return false;
+  const m=(error.message||'')+' '+(error.code||'');
+  if(/jwt|expired|token|not authenticated|PGRST301/i.test(m)){
+    toast('Session timed out — please sign in again','err'); showLogin(); return true;
+  }
+  return false;
+}
+
+function showLogin(){ $('#app-loading').classList.add('hidden'); $('#app-main').classList.add('hidden'); $('#app-login').classList.remove('hidden'); }
+async function showApp(session){
+  $('#app-loading').classList.add('hidden'); $('#app-login').classList.add('hidden'); $('#app-main').classList.remove('hidden');
+  $('#who').textContent = session.user?.email || '';
+  await loadSettings();
+  await loadVocab();
+  fetchCustomers();              // load the customer database so booking autocomplete works on the Tee Sheet
+  $('#bk-date').value = todayISO(); dpSync('#bk-date');
+  await loadSchedule();
+}
+function todayISO(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Winnipeg',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
+
+$('#login-btn').onclick = async () => {
+  $('#login-err').textContent='';
+  const email=$('#login-email').value.trim(), password=$('#login-pass').value;
+  if(!email||!password){ $('#login-err').textContent='Enter email and password.'; return; }
+  $('#login-btn').disabled=true; $('#login-btn').textContent='Signing in…';
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  $('#login-btn').disabled=false; $('#login-btn').textContent='Sign in';
+  if(error){ $('#login-err').textContent=error.message; return; }
+  showApp(data.session);
+};
+$('#login-pass').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#login-btn').click(); });
+$('#logout-btn').onclick = async () => { await sb.auth.signOut(); showLogin(); };
+
+/* ---------- Tabs ---------- */
+const TAB_IDS = ['bookings','logs','customers','membership','bays','prices','overrides','templates','statuses','tags','paysettings'];
+const TAB_LOADERS = { logs:loadLogs, customers:loadCustomers, membership:loadMembership, bays:loadBaysTab, prices:loadPricesTab,
+  overrides:loadOverridesTab, templates:loadTemplatesTab, statuses:loadStatuses, tags:loadTags, paysettings:loadPaySettings };
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  const id=t.dataset.tab;
+  TAB_IDS.forEach(x=>$('#tab-'+x).classList.toggle('hidden', x!==id));
+  if(TAB_LOADERS[id]) TAB_LOADERS[id]();
+});
+
+/* ---------- Generic Supabase helpers ---------- */
+async function dbInsert(table,row){ const {error}=await sb.from(table).insert(row); if(error){ if(!isAuthError(error)) toast(error.message,'err'); return false; } return true; }
+async function dbUpdate(table,id,patch){ const {error}=await sb.from(table).update(patch).eq('id',id); if(error){ if(!isAuthError(error)) toast(error.message,'err'); return false; } return true; }
+async function dbDelete(table,id){ const {error}=await sb.from(table).delete().eq('id',id); if(error){ if(!isAuthError(error)) toast(error.message,'err'); return false; } return true; }
+
+/* ---------- Settings (bays / prices / weekly hours) ---------- */
+async function loadSettings(){
+  const { data, error } = await sb.from('settings').select('*').eq('id',1).single();
+  if(error){ if(!isAuthError(error)) toast('Could not load settings: '+error.message,'err'); return; }
+  SETTINGS = data;
+}
+async function loadVocab(){
+  const [c,s,t,m] = await Promise.all([
+    sb.from('bay_categories').select('*').order('sort'),
+    sb.from('booking_statuses').select('*').order('sort'),
+    sb.from('tags').select('*').order('name'),
+    sb.from('memberships').select('*').order('sort'),
+  ]);
+  if(isAuthError(c.error||s.error||t.error||m.error)) return;
+  CATEGORIES = c.data||[]; STATUSES = s.data||[]; TAGS = t.data||[]; MEMBERSHIPS = m.data||[];
+}
+const planName = id => (MEMBERSHIPS.find(p=>p.id===id)||{}).name || '';
+function categoryNames(){ const n=CATEGORIES.map(c=>c.name); return n.length?n:['Uneekor','TrackMan']; }
+const realBays = () => (SETTINGS.bays||[]).filter(b=>!b.holding);   // bookable bays (excludes the holding bay)
+const holdingBays = () => (SETTINGS.bays||[]).filter(b=>b.holding);
+
+/* ----- Bays tab (bays table + categories management) ----- */
+async function loadBaysTab(){ await loadVocab(); renderBays(); loadCategories(); }
+function renderBays(){
+  const cats=categoryNames();
+  $('#bays-list').innerHTML = `<table class="bays-table"><thead><tr>
+    <th>Name</th><th>Category</th><th>Description</th><th style="width:96px">Max players</th><th style="width:78px">Order</th><th></th>
+  </tr></thead><tbody>${realBays().map(b=>`
+    <tr class="bay-row" data-id="${b.id}">
+      <td><input class="input bay-name" value="${esc(b.name)}" placeholder="Bay name" /></td>
+      <td><select class="input bay-sim">${cats.map(c=>`<option ${b.sim===c?'selected':''}>${esc(c)}</option>`).join('')}${cats.includes(b.sim)?'':`<option selected>${esc(b.sim||'')}</option>`}</select></td>
+      <td><input class="input bay-desc" value="${esc(b.description||'')}" placeholder="Shown to customers" /></td>
+      <td><input class="input bay-max" type="number" min="1" max="12" value="${b.max_players??(SETTINGS.max_party??4)}" /></td>
+      <td><input class="input bay-sort" type="number" min="1" value="${b.sort??1}" /></td>
+      <td style="text-align:right"><button class="icon-btn bay-del" title="Remove">✕</button></td>
+    </tr>`).join('')}</tbody></table>
+    ${holdingBays().length?`<div class="dim" style="font-size:12.5px;line-height:1.5;margin:22px 0 6px;padding-top:16px;border-top:1px solid var(--border)"><b style="color:var(--orange)">Holding Bay</b> is always available on the Tee Sheet for parking bookings while you rearrange them. It's hidden from customers and isn't listed here.</div>`:''}`;
+  document.querySelectorAll('#bays-list .bay-row').forEach(row=>row.querySelector('.bay-del').onclick=()=>{
+    const id=row.dataset.id; SETTINGS.bays=SETTINGS.bays.filter(x=>x.id!==id); renderBays();
+  });
+}
+$('#add-bay-row').onclick=()=>{
+  const ids=SETTINGS.bays.map(b=>b.id);
+  let n=1; while(ids.includes('B'+n)) n++;
+  SETTINGS.bays.push({id:'B'+n,name:'New Bay',sim:categoryNames()[0],description:null,max_players:SETTINGS.max_party??4,sort:realBays().length+1}); renderBays();
+};
+$('#save-bays').onclick = async () => {
+  const rows=[...document.querySelectorAll('#bays-list .bay-row')];
+  const real=rows.map((row,idx)=>({ id:row.dataset.id, name:row.querySelector('.bay-name').value.trim()||('Bay '+(idx+1)), sim:row.querySelector('.bay-sim').value,
+    description:row.querySelector('.bay-desc').value.trim()||null, max_players:+row.querySelector('.bay-max').value||null, sort:+row.querySelector('.bay-sort').value||idx+1 }));
+  real.sort((a,b)=>(a.sort||0)-(b.sort||0));
+  const bays=[...real, ...holdingBays()];   // keep the holding bay pinned to the end
+  $('#save-bays').disabled=true;
+  const ok = await dbUpdate('settings',1,{ bays, updated_at:new Date().toISOString() });
+  $('#save-bays').disabled=false;
+  if(!ok) return;
+  SETTINGS.bays=bays; $('#bays-saved').textContent='Saved ✓'; setTimeout(()=>$('#bays-saved').textContent='',2500);
+  toast('Bays saved — live on the booking site','ok');
+};
+
+/* ----- Prices tab ----- */
+// ----- Time-block rate helpers (same shape as server + client) -----
+function bandsOf(r){
+  if(r && Array.isArray(r.bands) && r.bands.length)
+    return r.bands.map(b=>({start:Math.max(0,Math.min(23,Math.round(+b.start||0))),wd:+b.wd||0,we:+b.we||0})).sort((a,b)=>a.start-b.start);
+  const peak = r&&r.peakStartHour!=null ? +r.peakStartHour : 17;
+  return [{start:0,wd:(r&&r.weekdayOffPeak)??25,we:(r&&r.weekendOffPeak)??30},
+          {start:peak,wd:(r&&r.weekdayPeak)??32,we:(r&&r.weekendPeak)??36}].sort((a,b)=>a.start-b.start);
+}
+function rateFromBands(bands, weekend, hour){ let b=bands[0]; for(const x of bands){ if(x.start<=hour) b=x; else break; } return weekend?b.we:b.wd; }
+const hourLabel = h => fmtMin((h%24)*60);
+
+let RATE_BANDS=[];   // working copy for the block editor
+function renderBandRows(){
+  RATE_BANDS.sort((a,b)=>a.start-b.start);   // always chronological
+  const startOpts = sel => Array.from({length:24},(_,h)=>`<option value="${h}" ${h===sel?'selected':''}>${hourLabel(h)}</option>`).join('');
+  // Each block runs from its start until the next block starts (first covers everything before it; last runs to close).
+  const rangeText = i => `<b>${i===0?'Open':hourLabel(RATE_BANDS[i].start)}</b> – <b>${RATE_BANDS[i+1]?hourLabel(RATE_BANDS[i+1].start):'Close'}</b>`;
+  $('#bands-list').innerHTML = RATE_BANDS.map((b,i)=>`
+    <div class="band-row" data-i="${i}">
+      <div class="bd-when">
+        <select class="input bd-start">${startOpts(b.start)}</select>
+        <div class="bd-range">Applies ${rangeText(i)}</div>
+      </div>
+      <div class="cur"><input class="input bd-wd" type="number" min="0" value="${b.wd}" /></div>
+      <div class="cur"><input class="input bd-we" type="number" min="0" value="${b.we}" /></div>
+      <button class="icon-btn bd-del" title="Remove" ${RATE_BANDS.length<=1?'disabled style="opacity:.35;cursor:not-allowed"':''}>✕</button>
+    </div>`).join('');
+  enhanceSelects($('#bands-list'));
+  $('#bands-list').querySelectorAll('.band-row').forEach(row=>{
+    const i=+row.dataset.i;
+    row.querySelector('.bd-start').addEventListener('change',e=>{ RATE_BANDS[i].start=+e.target.value; renderBandRows(); });
+    row.querySelector('.bd-wd').addEventListener('input',e=>{ RATE_BANDS[i].wd=+e.target.value||0; });
+    row.querySelector('.bd-we').addEventListener('input',e=>{ RATE_BANDS[i].we=+e.target.value||0; });
+    if(RATE_BANDS.length>1) row.querySelector('.bd-del').onclick=()=>{ RATE_BANDS.splice(i,1); renderBandRows(); };
+  });
+}
+$('#add-band').onclick=()=>{ const last=RATE_BANDS[RATE_BANDS.length-1]||{start:9,wd:25,we:30}; RATE_BANDS.push({start:Math.min(23,(last.start||0)+1),wd:last.wd,we:last.we}); renderBandRows(); };
+
+function renderRates(){
+  RATE_BANDS = bandsOf((SETTINGS&&SETTINGS.rates)||{}).map(b=>({...b}));
+  renderBandRows();
+  $('#r-note').value=((SETTINGS&&SETTINGS.rates)||{}).note||'';
+  $('#r-min').value=String(SETTINGS.min_mins??60);
+  $('#r-party').value=SETTINGS.max_party??4;
+  syncSelects($('#tab-prices'));
+}
+$('#save-prices').onclick = async () => {
+  const rates=curRates();
+  const pay={ ...(SETTINGS.pay||{}), acceptDeposit:$('#d-accept').checked, captureMethod:$('#d-capture').value,
+    chargePercent:+$('#d-pct').value||0, chargeAmount:$('#d-amt').value!==''?(+$('#d-amt').value||0):null, chargeBack:$('#d-chargeback').value==='yes' };
+  $('#save-prices').disabled=true;
+  const ok = await dbUpdate('settings',1,{ rates, min_mins:+$('#r-min').value, max_party:+$('#r-party').value, pay, updated_at:new Date().toISOString() });
+  $('#save-prices').disabled=false;
+  if(!ok) return;
+  SETTINGS={...SETTINGS,rates,min_mins:+$('#r-min').value,max_party:+$('#r-party').value,pay};
+  renderPriceOverview();
+  $('#prices-saved').textContent='Saved ✓'; setTimeout(()=>$('#prices-saved').textContent='',2500);
+  toast('Prices & deposit saved — live on the booking site','ok');
+};
+
+/* ----- Prices: live overview + seasons ----- */
+function loadPricesTab(){ renderRates(); renderPriceOverview(); renderDeposit(); loadPriceTemplates(); syncSelects(); }
+
+/* ----- Deposit & payment rules ----- */
+function renderDeposit(){
+  const p=SETTINGS.pay||{};
+  $('#d-accept').checked = p.acceptDeposit!==false;
+  $('#d-capture').value = p.captureMethod||'Credit Card Hold';
+  $('#d-pct').value = p.chargePercent??50;
+  $('#d-amt').value = (p.chargeAmount??'')===''?'':p.chargeAmount;
+  $('#d-chargeback').value = p.chargeBack?'yes':'no';
+  depToggle();
+}
+function depToggle(){ const on=$('#d-accept').checked; const f=$('#dep-fields'); f.style.opacity=on?'1':'.45'; f.style.pointerEvents=on?'auto':'none'; depExample(); }
+function depExample(){
+  const base=bandsOf((SETTINGS&&SETTINGS.rates)||{})[0].wd||0;   // a $X/hr, 1-hour example (first block, weekday)
+  const cur=(SETTINGS.pay&&SETTINGS.pay.currency)||'CAD';
+  const amt=+$('#d-amt').value, pct=+$('#d-pct').value;
+  let dep=0;
+  if($('#d-accept').checked && $('#d-capture').value!=='No Payment') dep = amt>0 ? amt : Math.round(base*(pct||0))/100;
+  const verb = $('#d-capture').value==='Credit Card Hold' ? 'held' : 'charged';
+  $('#dep-example').textContent = `${cur} $${dep.toFixed(2)} ${verb} on a $${base} booking`;
+}
+$('#d-accept').onchange=depToggle;
+['#d-capture','#d-pct','#d-amt'].forEach(s=>{ const el=$(s); if(el){ el.addEventListener('input',depExample); el.addEventListener('change',depExample); } });
+function curRates(){
+  const rows=[...document.querySelectorAll('#bands-list .band-row')];
+  let bands=rows.map(r=>({ start:+r.querySelector('.bd-start').value||0, wd:+r.querySelector('.bd-wd').value||0, we:+r.querySelector('.bd-we').value||0 }));
+  if(!bands.length) bands=[{start:0,wd:25,we:30}];
+  bands.sort((a,b)=>a.start-b.start);
+  bands=bands.filter((b,i)=>i===0||b.start!==bands[i-1].start);   // one block per start hour
+  return { bands, note:($('#r-note').value||'').trim()||null };
+}
+function ratesSummary(r){
+  return bandsOf(r).map(b=>`<b>${hourLabel(b.start)}</b> $${b.wd}/$${b.we}`).join(' &nbsp;·&nbsp; ') + ' <span class="dim">wk/wknd</span>';
+}
+function closePx(){ $('#px-overlay').classList.remove('show'); $('#px-sheet').innerHTML=''; }
+
+function renderPriceOverview(){
+  const std=SETTINGS.rates||{}, br=SETTINGS.bay_rates||{};
+  const blocks = r => bandsOf(r).map(b=>`<span class="blk"><b>${hourLabel(b.start)}</b> $${b.wd}<span class="dim">/$${b.we}</span></span>`).join('');
+  const rows=realBays().map(b=>{ const custom=br[b.id]; const r=custom||std;
+    return `<tr>
+      <td><b>${esc(b.name)}</b><div class="dim" style="font-size:12px">${esc(b.sim||'')}</div></td>
+      <td><div class="blk-list">${blocks(r)}</div></td>
+      <td>${custom?`<span class="pill manager">Custom</span> <button class="btn btn-ghost btn-sm br-reset" data-id="${b.id}" style="margin-left:6px">Reset</button>`:'<span class="pill online">Standard</span>'}</td>
+    </tr>`; }).join('');
+  $('#price-overview').innerHTML=`<thead><tr><th>Bay</th><th>Rate blocks <span class="dim">(weekday / weekend $ per hr)</span></th><th>Pricing</th></tr></thead><tbody>${rows}</tbody>`;
+  $('#price-overview').querySelectorAll('.br-reset').forEach(b=>b.onclick=()=>resetBayRate(b.dataset.id));
+}
+async function resetBayRate(id){
+  const br={...(SETTINGS.bay_rates||{})}; if(id) delete br[id]; else for(const k of Object.keys(br)) delete br[k];
+  if(!(await dbUpdate('settings',1,{bay_rates:br,updated_at:new Date().toISOString()}))) return;
+  SETTINGS.bay_rates=br; renderPriceOverview(); toast(id?`${bayName(id)} back to standard pricing`:'All bays back to standard','ok');
+}
+
+// Save the editor's current rates as a named season.
+$('#save-season').onclick = () => {
+  const co=$('#px-overlay'), cs=$('#px-sheet');
+  cs.innerHTML=`
+    <button class="sheet-close" id="pxx">✕</button>
+    <h3>Save as template</h3>
+    <div class="sub">Saves the rates currently in the editor so you can re-apply them anytime.</div>
+    <div class="field"><label>Template name</label><input class="input" id="px-name" placeholder="e.g. Summer, Winter, Holiday" autocomplete="off" /></div>
+    <div class="pay-box">
+      ${curRates().bands.map(b=>`<div class="kv"><span class="k">${hourLabel(b.start)}</span><span>$${b.wd} <span class="dim">weekday</span> &nbsp;·&nbsp; $${b.we} <span class="dim">weekend</span></span></div>`).join('')}
+    </div>
+    <button class="btn btn-primary" id="px-save" style="width:100%;margin-top:14px">Save template</button>`;
+  co.classList.add('show'); $('#pxx').onclick=closePx; co.onclick=e=>{ if(e.target===co) closePx(); }; $('#px-name').focus();
+  $('#px-save').onclick=async()=>{
+    const name=$('#px-name').value.trim(); if(!name){ toast('Name the template first','err'); return; }
+    if(await dbInsert('price_templates',{ name, rates:curRates(), bay_ids:[] })){ closePx(); toast(`Template “${name}” saved`,'ok'); loadPriceTemplates(); }
+  };
+};
+
+async function loadPriceTemplates(){
+  const { data, error } = await sb.from('price_templates').select('*').order('created_at');
+  if(isAuthError(error)) return;
+  const list=data||[];
+  $('#ptpl-list').innerHTML = list.length ? list.map(t=>`
+    <div class="ptpl">
+      <div class="ptpl-info">
+        <div class="ptpl-name">${esc(t.name)}</div>
+        <div class="ptpl-rates">${ratesSummary(t.rates||{})}</div>
+        ${(t.rates&&t.rates.note)?`<div class="ptpl-note">“${esc(t.rates.note)}”</div>`:''}
+      </div>
+      <div class="ptpl-actions">
+        <button class="btn btn-primary btn-sm ptpl-all" data-id="${t.id}">Apply to all bays</button>
+        <button class="btn btn-ghost btn-sm ptpl-some" data-id="${t.id}">Only certain bays…</button>
+        <button class="icon-btn ptpl-del" data-id="${t.id}" title="Delete">✕</button>
+      </div>
+    </div>`).join('') : '<div class="empty">No templates yet — set your rates above and click “Save as template”.</div>';
+  $('#ptpl-list').querySelectorAll('.ptpl-all').forEach(b=>b.onclick=()=>applyToAll(list.find(x=>x.id===b.dataset.id)));
+  $('#ptpl-list').querySelectorAll('.ptpl-some').forEach(b=>b.onclick=()=>openApplyBays(list.find(x=>x.id===b.dataset.id)));
+  $('#ptpl-list').querySelectorAll('.ptpl-del').forEach(b=>b.onclick=async()=>{ if(await dbDelete('price_templates',b.dataset.id)){ toast('Template deleted','ok'); loadPriceTemplates(); } });
+}
+async function applyToAll(t){
+  if(!t) return;
+  const patch={ rates:t.rates, bay_rates:{}, updated_at:new Date().toISOString() };
+  if(!(await dbUpdate('settings',1,patch))) return;
+  SETTINGS={...SETTINGS,...patch}; renderRates(); renderPriceOverview();
+  toast(`“${t.name}” is now the standard price for all bays`,'ok');
+}
+function openApplyBays(t){
+  if(!t) return;
+  const co=$('#px-overlay'), cs=$('#px-sheet'); const sel=new Set();
+  cs.innerHTML=`
+    <button class="sheet-close" id="pxx">✕</button>
+    <h3>Apply “${esc(t.name)}” to…</h3>
+    <div class="sub">Pick which bays use this template's pricing. The other bays keep their current price.</div>
+    <div class="pay-box" style="margin-bottom:14px"><div class="kv" style="border:none"><span class="k">Rates</span><span style="text-align:right;font-size:13px">${ratesSummary(t.rates||{})}</span></div></div>
+    <div class="chips" id="px-bays" style="margin-bottom:16px">${realBays().map(b=>`<span class="chip" data-id="${b.id}">${esc(b.name)}</span>`).join('')}</div>
+    <button class="btn btn-primary" id="px-apply" style="width:100%">Apply to selected bays</button>`;
+  co.classList.add('show'); $('#pxx').onclick=closePx; co.onclick=e=>{ if(e.target===co) closePx(); };
+  cs.querySelectorAll('#px-bays .chip').forEach(ch=>ch.onclick=()=>{ const id=ch.dataset.id; if(sel.has(id)){sel.delete(id);ch.classList.remove('on');} else {sel.add(id);ch.classList.add('on');} });
+  $('#px-apply').onclick=async()=>{
+    if(!sel.size){ toast('Pick at least one bay','err'); return; }
+    const br={...(SETTINGS.bay_rates||{})}; sel.forEach(id=>br[id]=t.rates);
+    if(!(await dbUpdate('settings',1,{bay_rates:br,updated_at:new Date().toISOString()}))) return;
+    SETTINGS.bay_rates=br; closePx(); renderPriceOverview();
+    toast(`“${t.name}” applied to ${sel.size} bay${sel.size>1?'s':''}`,'ok');
+  };
+}
+
+/* ----- Templates tab (weekly hours + presets) ----- */
+function renderHours(){
+  $('#hours-list').innerHTML = DOW.map((d,wd)=>{
+    const [o,c]=SETTINGS.hours[wd]||[0,0];
+    return `<div class="hour-row" data-wd="${wd}">
+      <div class="muted" style="padding-bottom:11px">${d}</div>
+      <div><label>Open</label><input class="input h-open" type="number" min="0" max="23" value="${o}" /></div>
+      <div><label>Close</label><input class="input h-close" type="number" min="0" max="24" value="${c}" /></div>
+    </div>`;
+  }).join('');
+}
+function gatherHours(){
+  const hours={};
+  document.querySelectorAll('#hours-list .hour-row').forEach(row=>{
+    const wd=row.dataset.wd; hours[wd]=[ +row.querySelector('.h-open').value||0, +row.querySelector('.h-close').value||0 ];
+  });
+  return hours;
+}
+async function loadTemplatesTab(){
+  renderHours();
+  renderWeeklyStatusEditor();
+  const { data } = await sb.from('schedule_templates').select('*').order('created_at');
+  const list=data||[];
+  $('#tpl-list').innerHTML = list.length ? list.map(t=>{
+    const summ = DOW.map((d,wd)=>{ const h=(t.hours||{})[wd]; return h&&h[1]>h[0]?`${d.slice(0,3)} ${h[0]}–${h[1]}`:`${d.slice(0,3)} closed`; }).join(' · ');
+    return `<div class="li" style="cursor:default">
+      <div style="flex:1">
+        <div class="li-t">${esc(t.name)}</div>
+        <div class="li-s">${summ}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm tpl-apply" data-id="${t.id}">Apply</button>
+      <button class="icon-btn tpl-del" data-id="${t.id}" title="Delete" style="margin-left:8px">✕</button>
+    </div>`;
+  }).join('') : '<div class="empty">No templates yet.</div>';
+  document.querySelectorAll('.tpl-apply').forEach(b=>b.onclick=async()=>{
+    const t=list.find(x=>x.id===b.dataset.id); if(!t) return;
+    SETTINGS.hours=t.hours; renderHours();
+    if(await dbUpdate('settings',1,{hours:t.hours,updated_at:new Date().toISOString()})) toast('Template applied — now the active hours','ok');
+  });
+  document.querySelectorAll('.tpl-del').forEach(b=>b.onclick=async()=>{ if(await dbDelete('schedule_templates',b.dataset.id)){ toast('Template deleted','ok'); loadTemplatesTab(); } });
+}
+$('#save-hours').onclick = async () => {
+  const hours=gatherHours();
+  $('#save-hours').disabled=true;
+  const ok=await dbUpdate('settings',1,{hours,updated_at:new Date().toISOString()});
+  $('#save-hours').disabled=false;
+  if(!ok) return;
+  SETTINGS.hours=hours; $('#tpl-saved').textContent='Saved ✓'; setTimeout(()=>$('#tpl-saved').textContent='',2500);
+  toast('Weekly hours saved — live on the booking site','ok');
+};
+
+/* ----- Weekly tee-sheet status pattern ----- */
+function scheduleStatuses(){ return STATUSES.filter(isScheduleStatus); }
+function statusFields(s){ return { statusId:s.id, label:s.label, color:s.color, open:s.kind!=='closed' }; }
+function statusOptEls(sel){ return scheduleStatuses().map(s=>`<option value="${s.id}" ${String(s.id)===String(sel)?'selected':''}>${esc(s.label)}</option>`).join(''); }
+function defaultOpenStatusId(){ const ss=scheduleStatuses(); const o=ss.find(s=>s.kind==='open'&&/^open$/i.test((s.label||'').trim()))||ss.find(s=>s.kind==='open'); return o?o.id:(ss[0]?ss[0].id:''); }
+function bandRowHTML(b){
+  const s=(b&&b.start!=null)?b.start:17*60, e=(b&&b.end!=null)?b.end:19*60;
+  return `<div class="wk-band">
+    <select class="input wk-b-status">${statusOptEls(b&&b.statusId)}</select>
+    <select class="input wk-b-from">${minOptions(s)}</select><span class="wk-dash">–</span>
+    <select class="input wk-b-to">${minOptions(e)}</select>
+    <button class="icon-btn wk-b-del" type="button" title="Remove band">✕</button>
+  </div>`;
+}
+function wireBandDeletes(host){ host.querySelectorAll('.wk-b-del').forEach(b=>b.onclick=()=>b.closest('.wk-band').remove()); }
+function renderWeeklyStatusEditor(){
+  const host=$('#weekly-status-editor'); if(!host) return;
+  if(!scheduleStatuses().length){ host.innerHTML='<div class="empty">Add a schedule status first — see the Statuses tab.</div>'; return; }
+  const ws=(SETTINGS&&SETTINGS.weekly_status)||{};
+  host.innerHTML = DOW.map((d,wd)=>{
+    const bands=Array.isArray(ws[wd])?ws[wd]:(Array.isArray(ws[String(wd)])?ws[String(wd)]:[]);
+    const full=bands.find(b=>b.full), extra=bands.filter(b=>!b.full);
+    return `<div class="wk-row" data-wd="${wd}">
+      <div class="wk-day">${d}</div>
+      <div class="wk-def"><label>Default (all bays)</label><select class="input wk-default">${statusOptEls(full?full.statusId:defaultOpenStatusId())}</select></div>
+      <div class="wk-bandwrap"><div class="wk-bands">${extra.map(bandRowHTML).join('')}</div>
+        <button class="btn btn-ghost btn-sm wk-addband" type="button">+ Time band</button></div>
+    </div>`;
+  }).join('');
+  host.querySelectorAll('.wk-addband').forEach(btn=>btn.onclick=()=>{
+    btn.closest('.wk-row').querySelector('.wk-bands').insertAdjacentHTML('beforeend', bandRowHTML({}));
+    wireBandDeletes(host); syncSelects();
+  });
+  wireBandDeletes(host);
+}
+async function saveWeeklyStatus(){
+  const byId=id=>scheduleStatuses().find(s=>String(s.id)===String(id));
+  const ws={};
+  document.querySelectorAll('#weekly-status-editor .wk-row').forEach(row=>{
+    const wd=row.dataset.wd, bands=[];
+    const def=byId(row.querySelector('.wk-default').value);
+    if(def) bands.push({ full:true, ...statusFields(def) });
+    row.querySelectorAll('.wk-band').forEach(bd=>{
+      const st=byId(bd.querySelector('.wk-b-status').value);
+      const from=+bd.querySelector('.wk-b-from').value, to=+bd.querySelector('.wk-b-to').value;
+      if(st && to>from) bands.push({ start:from, end:to, bays:[], ...statusFields(st) });
+    });
+    ws[wd]=bands;
+  });
+  const btn=$('#save-weekly-status'); btn.disabled=true;
+  const ok=await dbUpdate('settings',1,{weekly_status:ws,updated_at:new Date().toISOString()});
+  btn.disabled=false;
+  if(!ok){ toast('Save failed — run database migration 0010 (supabase/migrations) first.','err'); return; }
+  SETTINGS.weekly_status=ws; toast('Weekly status saved — live on the tee sheet & booking site','ok');
+}
+$('#save-weekly-status').onclick=saveWeeklyStatus;
+$('#tpl-save').onclick = async () => {
+  const name=$('#tpl-name').value.trim(); if(!name){ toast('Name the template first','err'); return; }
+  if(await dbInsert('schedule_templates',{name,hours:gatherHours()})){ $('#tpl-name').value=''; toast('Template saved','ok'); loadTemplatesTab(); }
+};
+
+/* ----- Categories / Statuses / Tags (generic color CRUD) ----- */
+function crudRow(item, table, nameField, hasSort){
+  const v=item[nameField]||'';
+  return `<div class="crud-row ${hasSort?'':'no-sort'}" data-id="${item.id}">
+    <input class="input cr-name" value="${esc(v)}" placeholder="Name" />
+    <input class="color-in cr-color" type="color" value="${esc(item.color||'#F0523D')}" />
+    ${hasSort?`<input class="input cr-sort" type="number" value="${item.sort??0}" title="Sort order" />`:''}
+    <button class="icon-btn cr-del" title="Delete">✕</button>
+  </div>`;
+}
+function wireCrud(host, table, nameField, hasSort, reload){
+  host.querySelectorAll('.crud-row').forEach(row=>{
+    const id=row.dataset.id;
+    const save=()=>{ const patch={[nameField]:row.querySelector('.cr-name').value.trim(),color:row.querySelector('.cr-color').value};
+      if(hasSort) patch.sort=+row.querySelector('.cr-sort').value||0; dbUpdate(table,id,patch).then(()=>loadVocab()); };
+    row.querySelector('.cr-name').addEventListener('change',save);
+    row.querySelector('.cr-color').addEventListener('change',save);
+    if(hasSort) row.querySelector('.cr-sort').addEventListener('change',save);
+    row.querySelector('.cr-del').onclick=async()=>{ if(await dbDelete(table,id)){ toast('Deleted','ok'); await loadVocab(); reload(); } };
+  });
+}
+async function loadCategories(){
+  await loadVocab();
+  if($('#bays-list').innerHTML) renderBays();   // keep the bay Category dropdowns in sync
+  const host=$('#cats-list');
+  host.innerHTML = CATEGORIES.length ? CATEGORIES.map(c=>crudRow(c,'bay_categories','name',true)).join('') : '<div class="empty">No categories yet.</div>';
+  wireCrud(host,'bay_categories','name',true,loadCategories);
+}
+$('#add-category').onclick=async()=>{ if(await dbInsert('bay_categories',{name:'New category',color:'#F0523D',sort:CATEGORIES.length})){ await loadVocab(); loadCategories(); } };
+
+// A status is a "schedule" status when its kind is open/closed (it carries the tee-sheet
+// Open/Closed toggle); anything else (kind 'booking') is a booking/workflow status.
+const isScheduleStatus = s => s.kind==='open' || s.kind==='closed';
+
+function wireStatusRows(host){
+  host.querySelectorAll('tr[data-id]').forEach(row=>{
+    const id=row.dataset.id;
+    const save=()=>{ const patch={ label:row.querySelector('.st-name').value.trim(), color:row.querySelector('.st-color').value, sort:+row.querySelector('.st-sort').value||0 };
+      const k=row.querySelector('.st-kind'); if(k) patch.kind=k.value;   // schedule rows only
+      dbUpdate('booking_statuses',id,patch).then(loadVocab); };
+    row.querySelectorAll('.st-name,.st-kind,.st-color,.st-sort').forEach(el=>el.addEventListener('change',save));
+    row.querySelector('.st-del').onclick=async()=>{ if(await dbDelete('booking_statuses',id)){ toast('Deleted','ok'); await loadVocab(); loadStatuses(); } };
+  });
+}
+const statusPill=(s,col)=>`<span class="pill" style="background:${col}22;color:${col};border:1px solid ${col}66">${esc(s.label)}</span>`;
+
+async function loadStatuses(){
+  await loadVocab();
+  const booking=STATUSES.filter(s=>!isScheduleStatus(s)), schedule=STATUSES.filter(isScheduleStatus);
+
+  const bHost=$('#booking-statuses-list');
+  bHost.innerHTML = booking.length ? `<table><thead><tr>
+    <th>Name</th><th style="width:230px">Tee sheet tile</th><th style="width:78px">Order</th><th></th></tr></thead><tbody>${
+    booking.map(s=>{ const col=esc(s.color||'#4ec06a'); return `<tr data-id="${s.id}">
+      <td><input class="input st-name" value="${esc(s.label)}" /></td>
+      <td><div style="display:flex;align-items:center;gap:8px"><input class="color-in st-color" type="color" value="${col}" />${statusPill(s,col)}</div></td>
+      <td><input class="input st-sort" type="number" value="${s.sort??0}" /></td>
+      <td style="text-align:right"><button class="icon-btn st-del" title="Delete">✕</button></td>
+    </tr>`; }).join('')}</tbody></table>` : '<div class="empty">No booking statuses yet.</div>';
+  wireStatusRows(bHost);
+
+  const sHost=$('#schedule-statuses-list');
+  sHost.innerHTML = schedule.length ? `<table><thead><tr>
+    <th>Name</th><th style="width:130px">Type</th><th style="width:230px">Tee sheet tile</th><th style="width:78px">Order</th><th></th></tr></thead><tbody>${
+    schedule.map(s=>{ const col=esc(s.color||'#4ec06a'); return `<tr data-id="${s.id}">
+      <td><input class="input st-name" value="${esc(s.label)}" /></td>
+      <td><select class="input st-kind"><option value="open" ${s.kind!=='closed'?'selected':''}>Open</option><option value="closed" ${s.kind==='closed'?'selected':''}>Closed</option></select></td>
+      <td><div style="display:flex;align-items:center;gap:8px"><input class="color-in st-color" type="color" value="${col}" />${statusPill(s,col)}</div></td>
+      <td><input class="input st-sort" type="number" value="${s.sort??0}" /></td>
+      <td style="text-align:right"><button class="icon-btn st-del" title="Delete">✕</button></td>
+    </tr>`; }).join('')}</tbody></table>` : '<div class="empty">No schedule statuses yet.</div>';
+  wireStatusRows(sHost);
+  enhanceSelects(sHost);
+}
+$('#add-booking-status').onclick=async()=>{ if(await dbInsert('booking_statuses',{label:'New status',color:'#4ec06a',kind:'booking',sort:STATUSES.length})){ await loadVocab(); loadStatuses(); } };
+$('#add-schedule-status').onclick=async()=>{ if(await dbInsert('booking_statuses',{label:'New status',color:'#4ec06a',kind:'open',sort:STATUSES.length})){ await loadVocab(); loadStatuses(); } };
+
+/* ---------- Payment Settings ---------- */
+function loadPaySettings(){
+  const p=(SETTINGS&&SETTINGS.pay)||{};
+  $('#p-accept').checked = p.acceptPayments!==false;
+  $('#p-tax').value = p.taxPct??12;
+  $('#p-currency').value = p.currency||'CAD';
+  $('#p-capture').value = p.captureMethod||'Credit Card Hold';
+  $('#p-priority').value = p.priorityCapture||'No Payment';
+  $('#p-hold').value = p.holdDisclaimer||'';
+  $('#p-pay').value = p.paymentDisclaimer||'';
+  $('#pay-proc-pill').textContent = (p.processor||'Stripe')+' · test mode';
+  syncSelects();
+}
+$('#save-pay').onclick = async () => {
+  const pay={ ...(SETTINGS.pay||{}), acceptPayments:$('#p-accept').checked, taxPct:+$('#p-tax').value||0, currency:$('#p-currency').value,
+    captureMethod:$('#p-capture').value, priorityCapture:$('#p-priority').value, processor:(SETTINGS.pay&&SETTINGS.pay.processor)||'Stripe',
+    holdDisclaimer:$('#p-hold').value.trim(), paymentDisclaimer:$('#p-pay').value.trim() };
+  $('#save-pay').disabled=true;
+  const ok=await dbUpdate('settings',1,{pay,updated_at:new Date().toISOString()});
+  $('#save-pay').disabled=false;
+  if(!ok) return;
+  SETTINGS.pay=pay; $('#pay-saved').textContent='Saved ✓'; setTimeout(()=>$('#pay-saved').textContent='',2500);
+  toast('Payment settings saved','ok');
+};
+
+async function loadTags(){
+  await loadVocab();
+  const host=$('#tags-list');
+  host.innerHTML = TAGS.length ? TAGS.map(t=>crudRow(t,'tags','name',false)).join('') : '<div class="empty">No tags yet.</div>';
+  wireCrud(host,'tags','name',false,loadTags);
+}
+$('#add-tag').onclick=async()=>{ if(await dbInsert('tags',{name:'New tag',color:'#c4e538'})){ await loadVocab(); loadTags(); } };
+
+/* ----- Schedule Overrides tab ----- */
+let OV_BAYS = new Set(['']);   // '' = all bays
+function minOptions(sel){ let o=''; for(let m=0;m<=24*60;m+=30){ o+=`<option value="${m}" ${m===sel?'selected':''}>${m===24*60?'Midnight':fmtMin(m)}</option>`; } return o; }
+function renderOvBays(){
+  const all=OV_BAYS.has('');
+  $('#ov-bays').innerHTML = `<span class="bp ${all?'on':''}" data-b="">All bays</span>`+
+    realBays().map(b=>`<span class="bp ${OV_BAYS.has(b.id)?'on':''}" data-b="${b.id}">${esc(b.name)}</span>`).join('');
+  $('#ov-bays').querySelectorAll('.bp').forEach(el=>el.onclick=()=>{
+    const id=el.dataset.b;
+    if(id===''){ OV_BAYS=new Set(['']); }
+    else { OV_BAYS.delete(''); if(OV_BAYS.has(id)) OV_BAYS.delete(id); else OV_BAYS.add(id); if(!OV_BAYS.size) OV_BAYS=new Set(['']); }
+    renderOvBays();
+  });
+}
+function ovTypeSync(){
+  const t=$('#ov-type').value;
+  $('#ov-hours-wrap').style.display = t==='hours'?'grid':'none';
+  $('#ov-block-wrap').style.display = t==='block'?'grid':'none';
+  $('#ov-bays-row').style.display = t==='hours'?'none':'';
+  if(t==='block') ovBstartSync();
+}
+$('#ov-type').addEventListener('change', ovTypeSync);
+
+// Operating [openMin, closeMin] for a date from the weekly template, or null when closed.
+function ovDayHours(iso){ if(!iso) return null; const h=(SETTINGS.hours||{})[dowOf(iso)]||[0,0]; return h[1]>h[0]?[h[0]*60,h[1]*60]:null; }
+
+// "From" list = the start day's operating hours (leaving room for a "To"); falls back to all day when closed.
+function ovBstartSync(){
+  const h=ovDayHours($('#ov-date').value); const cur=+$('#ov-bstart').value;
+  const lo = h?h[0]:0, hi = (h?h[1]:24*60)-30;
+  const keep = (cur>=lo && cur<=hi) ? cur : lo;
+  let o=''; for(let m=lo;m<=hi;m+=30){ o+=`<option value="${m}" ${m===keep?'selected':''}>${fmtMin(m)}</option>`; }
+  $('#ov-bstart').innerHTML=o; $('#ov-bstart')._csSync&&$('#ov-bstart')._csSync();
+  ovBendSync();
+}
+// "To" list: single-day = after "From" up to that day's close; multi-day = the end day's operating hours.
+function ovBendSync(){
+  const s=+$('#ov-bstart').value; const endDate=$('#ov-end').value; const cur=+$('#ov-bend').value;
+  let lo, hi;
+  if(endDate){ const eh=ovDayHours(endDate); lo=eh?eh[0]:0; hi=eh?eh[1]:24*60; }
+  else { const sh=ovDayHours($('#ov-date').value); lo=s+30; hi=sh?sh[1]:24*60; }
+  if(hi<lo) hi=lo;
+  const keep = (cur>=lo && cur<=hi) ? cur : lo;
+  let o=''; for(let m=lo;m<=hi;m+=30){ o+=`<option value="${m}" ${m===keep?'selected':''}>${m>=1440?'Midnight':fmtMin(m)}</option>`; }
+  $('#ov-bend').innerHTML=o; $('#ov-bend')._csSync&&$('#ov-bend')._csSync();
+}
+$('#ov-bstart').addEventListener('change', ovBendSync);
+$('#ov-end').addEventListener('change', ovBendSync);
+$('#ov-date').addEventListener('change', ()=>{ if($('#ov-type').value==='block') ovBstartSync(); });
+
+function ovEffect(o){
+  if(o.start_min!=null) return `<span class="pill blocked">${fmtMin(o.start_min)} – ${fmtMin(o.end_min)}</span>`;
+  return o.is_closed ? '<span class="pill blocked">Closed all day</span>'
+    : `<span class="pill confirmed">${fmtMin((o.open_hour||0)*60)} – ${fmtMin((o.close_hour||0)*60)}</span>`;
+}
+function ovScope(o){ return (o.bay_ids&&o.bay_ids.length) ? o.bay_ids.map(id=>esc(bayName(id))).join(', ') : 'All bays'; }
+function ovDates(o){ return (o.end_date&&o.end_date!==o.override_date) ? `${shortDate2(o.override_date)} – ${shortDate2(o.end_date)}` : dateLabel(o.override_date); }
+const shortDate2 = iso => { const d=new Date(iso+'T00:00:00'); return MON_S[d.getMonth()]+' '+d.getDate(); };
+
+async function loadOverridesTab(){
+  if(!$('#ov-open').options.length){
+    $('#ov-open').innerHTML=hourOptions(11); $('#ov-close').innerHTML=hourOptions(23);
+    $('#ov-bstart').innerHTML=minOptions(12*60); $('#ov-bend').innerHTML=minOptions(13*60);
+  }
+  if(!$('#ov-date').value){ $('#ov-date').value=todayISO(); dpSync('#ov-date'); }
+  renderOvBays(); ovTypeSync(); syncSelects();
+  // Show recent starts AND anything still in effect (multi-day overrides whose end date is today+).
+  const cut=addDaysISO(todayISO(),-30), today=todayISO();
+  const { data, error } = await sb.from('schedule_overrides').select('*').or(`override_date.gte.${cut},end_date.gte.${today}`).order('override_date');
+  if(isAuthError(error)) return;
+  const list=data||[];
+  const tbl=$('#ov-table');
+  if(!list.length){ tbl.innerHTML='<tbody><tr><td class="empty">No overrides set.</td></tr></tbody>'; return; }
+  tbl.innerHTML=`<thead><tr><th>Date</th><th>Effect</th><th>Bays</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody>${
+    list.map(o=>{ const on=o.is_active!==false; return `<tr style="${on?'':'opacity:.55'}">
+      <td>${ovDates(o)}</td>
+      <td>${ovEffect(o)}</td>
+      <td class="muted">${ovScope(o)}</td>
+      <td class="muted">${esc(o.note||'')}</td>
+      <td>${on?'<span class="pill confirmed">Active</span>':'<span class="pill cancelled">Disabled</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm ov-tog" data-id="${o.id}" data-on="${on?1:0}">${on?'Disable':'Enable'}</button>
+        <button class="btn btn-danger btn-sm ov-del" data-id="${o.id}" style="margin-left:6px">Remove</button></td>
+    </tr>`; }).join('')}</tbody>`;
+  tbl.querySelectorAll('.ov-del').forEach(b=>b.onclick=async()=>{ if(await dbDelete('schedule_overrides',b.dataset.id)){ toast('Override removed','ok'); loadOverridesTab(); } });
+  tbl.querySelectorAll('.ov-tog').forEach(b=>b.onclick=async()=>{ if(await dbUpdate('schedule_overrides',b.dataset.id,{is_active:b.dataset.on!=='1'})){ toast(b.dataset.on==='1'?'Override disabled':'Override enabled','ok'); loadOverridesTab(); } });
+}
+$('#ov-add').onclick=async()=>{
+  const t=$('#ov-type').value, date=$('#ov-date').value;
+  if(!date){ toast('Pick a start date','err'); return; }
+  const end=$('#ov-end').value||null;
+  if(end && end<date){ toast('End date is before the start date','err'); return; }
+  const note=($('#ov-note').value||'').trim()||null;
+  const row={ override_date:date, end_date:end, note, is_active:true,
+    bay_ids: OV_BAYS.has('')?[]:[...OV_BAYS],
+    is_closed:false, open_hour:null, close_hour:null, start_min:null, end_min:null };
+  if(t==='closed'){ row.is_closed=true; }
+  else if(t==='hours'){
+    const o=+$('#ov-open').value, c=+$('#ov-close').value;
+    if(!(c>o)){ toast('Close hour must be after open','err'); return; }
+    row.open_hour=o; row.close_hour=c; row.bay_ids=[];
+  } else {
+    const s=+$('#ov-bstart').value, e=+$('#ov-bend').value;
+    if(!end && !(e>s)){ toast('End time must be after the start time','err'); return; }
+    if(!note){ toast('Give the block a reason — it shows on the tee sheet','err'); return; }
+    row.start_min=s; row.end_min=e;
+  }
+  const { error } = await sb.from('schedule_overrides').insert(row);
+  if(error){ if(!isAuthError(error)) toast(/column|bay_ids|is_active|start_min|end_date|duplicate/i.test(error.message)?'Run database migration 0007 first (supabase/migrations).':error.message,'err'); return; }
+  $('#ov-note').value=''; toast('Override added','ok'); loadOverridesTab();
+};
+
+/* ---------- Booking Logs tab ---------- */
+function bayName(id){ return (SETTINGS.bays.find(b=>b.id===id)||{}).name || id; }
+async function loadLogs(){
+  // populate bay filter once
+  const baySel=$('#lg-bay');
+  if(baySel.options.length<=1) realBays().forEach(b=>baySel.insertAdjacentHTML('beforeend',`<option value="${b.id}">${esc(b.name)}</option>`));
+  if(!$('#lg-from').value){ $('#lg-from').value=addDaysISO(todayISO(),-30); $('#lg-to').value=addDaysISO(todayISO(),30); dpSync('#lg-from'); dpSync('#lg-to'); }
+  await runLogsQuery();
+}
+['#lg-from','#lg-to','#lg-status','#lg-bay','#lg-q'].forEach(sel=>{
+  const el=$(sel); if(el) el.addEventListener(sel==='#lg-q'?'input':'change', debounce(runLogsQuery,250));
+});
+function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
+let LOGS=[];
+async function runLogsQuery(){
+  let q=sb.from('bookings').select('*').order('booking_date',{ascending:false}).order('start_min');
+  const from=$('#lg-from').value, to=$('#lg-to').value, st=$('#lg-status').value, bay=$('#lg-bay').value;
+  if(from) q=q.gte('booking_date',from);
+  if(to) q=q.lte('booking_date',to);
+  if(st) q=q.eq('status',st);
+  if(bay) q=q.eq('bay_id',bay);
+  const { data, error } = await q.limit(500);
+  if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
+  const term=$('#lg-q').value.trim().toLowerCase();
+  LOGS=(data||[]).filter(b=>!term || [b.customer_name,b.customer_email,b.customer_phone].some(x=>(x||'').toLowerCase().includes(term)));
+  renderLogs();
+}
+function tagPill(name){ const t=TAGS.find(x=>x.name===name); const col=t?t.color:'#B5B5B5';
+  return `<span class="tagpill" style="color:${col};border-color:${col}55;background:${col}1a">${esc(name)}</span>`; }
+function renderLogs(){
+  const tbl=$('#logs-table');
+  if(!LOGS.length){ tbl.innerHTML='<tbody><tr><td class="empty">No bookings match these filters.</td></tr></tbody>'; return; }
+  tbl.innerHTML=`<thead><tr>
+    <th>Date</th><th>Time</th><th>Bay</th><th>Customer</th><th>Contact</th><th>Source</th><th>Paid</th><th>Status</th><th>Label / Tags</th>
+  </tr></thead><tbody>${LOGS.map(b=>`<tr>
+    <td>${shortDate(b.booking_date)}</td>
+    <td>${fmtMin(b.start_min)}–${fmtMin(b.end_min)}</td>
+    <td>${esc(bayName(b.bay_id))}</td>
+    <td>${b.status==='blocked'?'<span class="dim">—</span>':esc(b.customer_name||'—')}</td>
+    <td class="muted">${esc(b.customer_phone||b.customer_email||'')}</td>
+    <td><span class="pill ${b.source==='manager'?'manager':'online'}">${esc(b.source||'')}</span></td>
+    <td>${b.amount_cents?'$'+(b.amount_cents/100).toFixed(2):'<span class="dim">—</span>'}</td>
+    <td><span class="pill ${b.status}">${esc(b.status)}</span></td>
+    <td>${b.status_label?`<span class="pill confirmed">${esc(b.status_label)}</span> `:''}${(b.tags||[]).map(tagPill).join('')}</td>
+  </tr>`).join('')}</tbody>`;
+}
+$('#logs-export').onclick=()=>{
+  if(!LOGS.length){ toast('Nothing to export','err'); return; }
+  const cols=['booking_date','start_min','end_min','bay_id','status','status_label','customer_name','customer_email','customer_phone','source','amount_cents','tags'];
+  const csv=[cols.join(',')].concat(LOGS.map(b=>cols.map(c=>{ let v=b[c]; if(Array.isArray(v))v=v.join('|'); v=v==null?'':String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }).join(','))).join('\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  const a=document.createElement('a'); a.href=url; a.download='joyhouse-bookings.csv'; a.click(); URL.revokeObjectURL(url);
+};
+
+/* ---------- Customers ---------- */
+const money = c => '$'+((c||0)/100).toFixed((c||0)%100?2:0);
+const custKeys = c => [ (c.email||'').trim().toLowerCase(), (c.phone||'').trim() ].filter(Boolean);
+async function fetchCustomers(){ const { data } = await sb.from('customers').select('*').order('name'); CUSTOMERS = data||[]; }
+async function fetchCustStats(){
+  CUST_STATS={};
+  const { data } = await sb.from('bookings').select('customer_email,customer_phone,booking_date').eq('status','confirmed');
+  (data||[]).forEach(b=>{
+    [ (b.customer_email||'').trim().toLowerCase(), (b.customer_phone||'').trim() ].filter(Boolean).forEach(k=>{
+      const s=CUST_STATS[k]||(CUST_STATS[k]={count:0,last:null});
+      s.count++; if(!s.last||b.booking_date>s.last) s.last=b.booking_date;
+    });
+  });
+}
+function statsFor(c){ for(const k of custKeys(c)){ if(CUST_STATS[k]) return CUST_STATS[k]; } return {count:0,last:null}; }
+// "(431) 374-0022" display for a stored +1XXXXXXXXXX number; anything else shows as saved.
+function fmtPhone(p){ const m=/^\+1(\d{3})(\d{3})(\d{4})$/.exec(p||''); return m?`(${m[1]}) ${m[2]}-${m[3]}`:(p||''); }
+const todayLocalISO = () => toISO(new Date());
+// Membership expiry cell: date + state (expired / ≤7 days soon), plus the amber review badge.
+function expiryBits(c){
+  let h='';
+  if(c.membership_id && c.membership_expires){
+    const t=todayLocalISO();
+    const cls=c.membership_expires<t?'expired':(addDaysISO(t,7)>=c.membership_expires?'soon':'');
+    const lbl=c.membership_expires<t?'Expired ':'expires ';
+    h+=`<div class="exp ${cls}">${lbl}${shortDate2(c.membership_expires)}${/2027/.test(c.membership_expires)?', 2027':''}</div>`;
+  }
+  if(c.membership_flag) h+=`<span class="fbadge" data-tip="${esc(c.membership_flag)}">!</span>`;
+  return h;
+}
+async function loadCustomers(){
+  await loadVocab(); await fetchCustomers(); await fetchCustStats();
+  renderCustomers();
+}
+function renderCustomers(){
+  const term=($('#cu-q').value||'').trim().toLowerCase();
+  const rows=CUSTOMERS.filter(c=>!term || [c.name,c.email,c.phone,c.waiver_code].some(x=>(x||'').toLowerCase().includes(term)));
+  const members=CUSTOMERS.filter(c=>c.membership_id).length;
+  const visits=CUSTOMERS.reduce((s,c)=>s+statsFor(c).count,0);   // live bookings only (imported history stays per-row)
+  $('#cu-total').textContent=CUSTOMERS.length; $('#cu-members').textContent=members; $('#cu-visits').textContent=visits;
+  const tbl=$('#cu-table');
+  if(!rows.length){ tbl.innerHTML='<tbody><tr><td class="empty">'+(CUSTOMERS.length?'No customers match your search.':'No customers yet — add one or import from bookings.')+'</td></tr></tbody>'; return; }
+  tbl.innerHTML=`<thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Membership</th><th>Bookings</th><th>Cancelled</th><th>Waiver</th><th>Last visit</th><th></th></tr></thead><tbody>${
+    rows.map(c=>{ const st=statsFor(c); return `<tr data-id="${c.id}">
+      <td><span class="name-link cu-edit">${esc(c.name||'—')}</span></td>
+      <td class="muted">${esc(c.email||'')}</td>
+      <td class="muted" style="white-space:nowrap">${esc(fmtPhone(c.phone))}</td>
+      <td>${c.membership_id?`<span class="pill manager">${esc(planName(c.membership_id))}</span>`:'<span class="dim">—</span>'}${expiryBits(c)}</td>
+      <td>${st.count+(c.legacy_bookings||0)}</td>
+      <td class="${(c.legacy_cancelled||0)>0?'':'dim'}">${c.legacy_cancelled||0}</td>
+      <td>${c.waiver_code?`<span class="wv-code">${esc(c.waiver_code)}</span>`:'<span class="dim">—</span>'}</td>
+      <td class="muted">${st.last?shortDate(st.last):'—'}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-ghost btn-sm cu-editbtn">Edit</button>
+        <button class="btn btn-danger btn-sm cu-del" style="margin-left:6px">Delete</button></td>
+    </tr>`; }).join('')}</tbody>`;
+  tbl.querySelectorAll('tr[data-id]').forEach(tr=>{
+    const id=tr.dataset.id, c=CUSTOMERS.find(x=>x.id===id);
+    tr.style.cursor='pointer';
+    tr.onclick=e=>{ if(e.target.closest('button')) return; openCustomer(c); };   // whole row opens the editor
+    tr.querySelector('.cu-editbtn').onclick=()=>openCustomer(c);
+    tr.querySelector('.cu-del').onclick=async()=>{ if(await dbDelete('customers',id)){ toast('Customer deleted','ok'); loadCustomers(); } };
+  });
+}
+$('#cu-q').addEventListener('input', ()=>renderCustomers());
+$('#cu-add').onclick=()=>openCustomer(null);
+$('#cu-import').onclick=async()=>{
+  const { data } = await sb.from('bookings').select('customer_name,customer_email,customer_phone').eq('status','confirmed');
+  const seen=new Map();
+  (data||[]).forEach(b=>{ const email=(b.customer_email||'').trim().toLowerCase(), phone=(b.customer_phone||'').trim(), key=email||phone;
+    if(key && !seen.has(key)) seen.set(key,{name:b.customer_name||null,email:b.customer_email||null,phone:b.customer_phone||null}); });
+  const existing=new Set(); CUSTOMERS.forEach(c=>custKeys(c).forEach(k=>existing.add(k)));
+  const toAdd=[...seen].filter(([k])=>!existing.has(k)).map(([,v])=>v);
+  if(!toAdd.length){ toast('No new customers to import','ok'); return; }
+  const { error } = await sb.from('customers').insert(toAdd);
+  if(error){ toast(error.message,'err'); return; }
+  toast(`Imported ${toAdd.length} customer${toAdd.length>1?'s':''}`,'ok'); loadCustomers();
+};
+function openCustomer(c){
+  const isNew=!c; c=c||{};
+  const st=isNew?{count:0,last:null}:statsFor(c);
+  const planOpts=`<option value="">— none —</option>`+MEMBERSHIPS.map(p=>`<option value="${p.id}" ${c.membership_id===p.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  sheet.innerHTML=`
+    <button class="sheet-close" id="x">✕</button>
+    <h3>${isNew?'New customer':esc(c.name||'Customer')}</h3>
+    <div class="sub">${isNew?'Add someone to your customer database.':`${st.count} booking${st.count===1?'':'s'}${st.last?' · last '+shortDate(st.last):''}`}</div>
+    <div class="field"><label>Name</label><input class="input" id="c-name" value="${esc(c.name||'')}" placeholder="Full name" /></div>
+    <div class="field"><label>Email</label><input class="input" id="c-email" value="${esc(c.email||'')}" placeholder="name@email.com" /></div>
+    <div class="field"><label>Phone</label><input class="input" id="c-phone" value="${esc(c.phone||'')}" placeholder="Optional" /></div>
+    <div class="time-row">
+      <div class="field" style="margin:0"><label>Membership</label><select class="input" id="c-plan">${planOpts}</select></div>
+      <div class="field" style="margin:0"><label>Membership expires</label><input class="input" id="c-expires" type="date" value="${esc(c.membership_expires||'')}" /></div>
+    </div>
+    ${c.membership_flag?`<div class="note-flag"><span class="fbadge" data-tip="${esc(c.membership_flag)}">!</span><span>${esc(c.membership_flag)}</span></div>`:''}
+    ${c.waiver_code?`<div class="kv" style="margin-bottom:12px"><span class="k">Waiver on file</span><span class="wv-code">${esc(c.waiver_code)}${c.waiver_signed_at?` <span class="dim">· signed ${shortDate(c.waiver_signed_at.slice(0,10))}</span>`:''}</span></div>`:''}
+    <div class="field"><label>Notes</label><input class="input" id="c-notes" value="${esc(c.notes||'')}" placeholder="Optional" /></div>
+    ${isNew?'':`<div class="field" style="margin-bottom:0"><label>Booking history</label><div class="cust-history" id="c-hist"><div class="dim" style="font-size:13px;padding:6px 0">Loading…</div></div></div>`}
+    <button class="btn btn-primary" id="c-save" style="width:100%;margin-top:16px">${isNew?'Add customer':'Save changes'}</button>
+    ${isNew?'':'<button class="btn btn-danger" id="c-del" style="width:100%;margin-top:10px">Delete customer</button>'}`;
+  overlay.classList.add('show');
+  $('#x').onclick=closeSheet;
+  enhanceSelects(sheet);
+  buildDatePicker($('#c-expires'));           // custom calendar, not the native control
+  if(!isNew) loadCustHistory(c,'c-hist');
+  $('#c-save').onclick=async()=>{
+    const patch={ name:$('#c-name').value.trim()||null, email:$('#c-email').value.trim()||null,
+      phone:$('#c-phone').value.trim()||null, membership_id:$('#c-plan').value||null, notes:$('#c-notes').value.trim()||null,
+      membership_expires:$('#c-expires').value||null,
+      membership_flag:null };   // saving from the editor confirms the data — clears the review badge
+    $('#c-save').disabled=true;
+    const { error } = isNew ? await sb.from('customers').insert(patch) : await sb.from('customers').update(patch).eq('id',c.id);
+    $('#c-save').disabled=false;
+    if(error){ toast(/duplicate|unique/i.test(error.message)?'A customer with that email already exists.':error.message,'err'); return; }
+    closeSheet(); toast(isNew?'Customer added':'Customer saved','ok'); loadCustomers();
+    if(!$('#tab-membership').classList.contains('hidden')) loadMembership();
+  };
+  if(!isNew) $('#c-del').onclick=async()=>{ if(await dbDelete('customers',c.id)){ closeSheet(); toast('Customer deleted','ok'); loadCustomers();
+    if(!$('#tab-membership').classList.contains('hidden')) loadMembership(); } };
+}
+
+// Audit trail: every booking + cancellation tied to this customer (matched by email / phone / name).
+const fmtTs = ts => { try{ return new Date(ts).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}); }catch(e){ return ''; } };
+async function loadCustHistory(c, hostId){
+  const host=document.getElementById(hostId); if(!host) return;
+  const ors=[];
+  if(c.email) ors.push('customer_email.ilike.'+c.email.trim());
+  if(c.phone) ors.push('customer_phone.eq.'+c.phone.trim());
+  if(c.name)  ors.push('customer_name.ilike.'+c.name.trim());
+  if(!ors.length){ host.innerHTML='<div class="dim" style="font-size:13px;padding:6px 0">No email or phone on file to match bookings.</div>'; return; }
+  const { data, error } = await sb.from('bookings').select('*').or(ors.join(',')).neq('status','blocked').order('created_at',{ascending:false}).limit(100);
+  if(error){ if(!isAuthError(error)) host.innerHTML='<div class="dim" style="font-size:13px;padding:6px 0">Could not load history.</div>'; return; }
+  const rows=data||[];
+  if(!rows.length){ host.innerHTML='<div class="dim" style="font-size:13px;padding:6px 0">No bookings on record yet.</div>'; return; }
+  const cancelled=rows.filter(b=>b.status==='cancelled').length, active=rows.length-cancelled;
+  host.innerHTML=`<div class="hist-sum">${active} booking${active===1?'':'s'} · ${cancelled} cancelled</div>`+rows.map(b=>{
+    const isC=b.status==='cancelled';
+    const pill=isC?'<span class="pill cancelled">Cancelled</span>':'<span class="pill confirmed">Booked</span>';
+    const sub=[ b.created_at?`Booked ${fmtTs(b.created_at)}`:'', (isC&&b.cancelled_at)?`Cancelled ${fmtTs(b.cancelled_at)}`:'' ].filter(Boolean).join('  ·  ');
+    return `<div class="hist-row">
+      <div class="hist-main">${pill} <span>${shortDate(b.booking_date)} · ${fmtMin(b.start_min)}–${fmtMin(b.end_min)}</span> <span class="dim">· ${esc(bayName(b.bay_id))}</span></div>
+      ${sub?`<div class="hist-sub dim">${sub}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+/* ---------- Membership ---------- */
+async function loadMembership(){
+  await loadVocab(); await fetchCustomers();
+  const counts={}; CUSTOMERS.forEach(c=>{ if(c.membership_id) counts[c.membership_id]=(counts[c.membership_id]||0)+1; });
+  const periods=['month','year','once'];
+  $('#plans-list').innerHTML = `<div class="plans-grid">${MEMBERSHIPS.map(p=>`
+    <div class="plan-card" data-id="${p.id}" style="border-left-color:${esc(p.color||'#c4e538')}">
+      <div class="plan-top">
+        <input class="input p-name" value="${esc(p.name)}" />
+        <span class="member-n">${counts[p.id]||0} member${(counts[p.id]||0)===1?'':'s'}</span>
+      </div>
+      <div class="mini">
+        <div><label>Price ($)</label><input class="input p-price" type="number" min="0" step="0.01" value="${(p.price_cents||0)/100}" /></div>
+        <div><label>Per</label><select class="input p-period">${periods.map(x=>`<option ${p.period===x?'selected':''}>${x}</option>`).join('')}</select></div>
+      </div>
+      <div class="mini">
+        <div><label>Discount %</label><input class="input p-disc" type="number" min="0" max="100" value="${p.discount_pct||0}" /></div>
+        <div><label>Accent</label><input class="color-in p-color" type="color" value="${esc(p.color||'#c4e538')}" style="width:100%" /></div>
+      </div>
+      <div class="field"><label>Perks</label><input class="input p-perks" value="${esc(p.perks||'')}" placeholder="What members get" /></div>
+      <div class="save-bar"><button class="btn btn-danger btn-sm p-del">Delete plan</button></div>
+    </div>`).join('')||'<div class="empty">No plans yet — add one.</div>'}</div>`;
+  document.querySelectorAll('.plan-card').forEach(card=>{
+    const id=card.dataset.id;
+    const save=async()=>{ const patch={ name:card.querySelector('.p-name').value.trim()||'Plan',
+      price_cents:Math.round((+card.querySelector('.p-price').value||0)*100), period:card.querySelector('.p-period').value,
+      discount_pct:+card.querySelector('.p-disc').value||0, color:card.querySelector('.p-color').value, perks:card.querySelector('.p-perks').value.trim()||null };
+      card.style.borderLeftColor=patch.color; if(await dbUpdate('memberships',id,patch)) await loadVocab(); };
+    card.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',save));
+    card.querySelector('.p-del').onclick=async()=>{ if(await dbDelete('memberships',id)){ toast('Plan deleted','ok'); loadMembership(); } };
+  });
+  // members table
+  const today=todayLocalISO();
+  const members=CUSTOMERS.filter(c=>c.membership_id).sort((a,b)=>{
+    const ea=a.membership_expires||'', eb=b.membership_expires||'';
+    const xa=(ea && ea<today)?1:0, xb=(eb && eb<today)?1:0;      // expired sink to the bottom
+    if(xa!==xb) return xa-xb;
+    return (ea||'9999').localeCompare(eb||'9999');               // then soonest expiry first
+  });
+  const tbl=$('#members-table');
+  tbl.innerHTML = members.length ? `<thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Plan</th><th>Expires</th><th></th></tr></thead><tbody>${
+    members.map(c=>`<tr data-id="${c.id}">
+      <td><span class="name-link">${esc(c.name||'—')}</span></td>
+      <td class="muted">${esc(c.email||'')}</td>
+      <td class="muted" style="white-space:nowrap">${esc(fmtPhone(c.phone))}</td>
+      <td><span class="pill manager">${esc(planName(c.membership_id))}</span></td>
+      <td>${expiryBits(c)||'<span class="dim">—</span>'}</td>
+      <td style="text-align:right"><button class="btn btn-ghost btn-sm mb-edit">Edit</button></td>
+    </tr>`).join('')
+  }</tbody>` : '<tbody><tr><td class="empty">No members yet — click “+ Add member” above.</td></tr></tbody>';
+  tbl.querySelectorAll('tr[data-id]').forEach(tr=>{
+    const c=CUSTOMERS.find(x=>x.id===tr.dataset.id);
+    tr.style.cursor='pointer';
+    tr.onclick=e=>{ if(e.target.closest('button')) return; openCustomer(c); };
+    tr.querySelector('.mb-edit').onclick=()=>openCustomer(c);
+  });
+}
+
+// Add a member: pick any customer, assign a plan + expiry in one step.
+async function openAddMember(){
+  if(!MEMBERSHIPS.length) await loadVocab();
+  if(!CUSTOMERS.length) await fetchCustomers();
+  let chosen=null;
+  sheet.innerHTML=`
+    <button class="sheet-close" id="x">✕</button>
+    <h3>Add member</h3>
+    <div class="sub">Pick a customer, choose their plan and expiry.</div>
+    <div class="field ac-wrap"><label>Customer</label>
+      <input class="input" id="am-q" placeholder="Search name / email / phone" autocomplete="off" />
+      <div class="ac-pop hidden" id="am-ac"></div></div>
+    <div class="field"><label>Plan</label><select class="input" id="am-plan">${MEMBERSHIPS.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Expires</label><input class="input" id="am-exp" type="date" /></div>
+    <button class="btn btn-primary" id="am-save" style="width:100%;margin-top:4px" disabled>Add member</button>`;
+  overlay.classList.add('show');
+  $('#x').onclick=closeSheet;
+  enhanceSelects(sheet); buildDatePicker($('#am-exp'));
+  const q=$('#am-q'), pop=$('#am-ac');
+  q.addEventListener('input',()=>{
+    chosen=null; $('#am-save').disabled=true;
+    const t=q.value.trim().toLowerCase();
+    if(!t){ pop.classList.add('hidden'); return; }
+    const hits=CUSTOMERS.filter(c=>[c.name,c.email,c.phone].some(x=>(x||'').toLowerCase().includes(t))).slice(0,7);
+    pop.innerHTML = hits.map(c=>`<div class="ac-item" data-id="${c.id}"><span>${esc(c.name||'(no name)')}${c.membership_id?' <span class="pill manager" style="margin-left:6px">'+esc(planName(c.membership_id))+'</span>':''}</span>${(c.email||c.phone)?`<span class="ac-sub">${esc(c.email||fmtPhone(c.phone))}</span>`:''}</div>`).join('')
+      || '<div class="ac-item"><span class="dim">No matches.</span></div>';
+    pop.classList.remove('hidden');
+    pop.querySelectorAll('.ac-item[data-id]').forEach(el=>el.onclick=()=>{
+      chosen=CUSTOMERS.find(c=>c.id===el.dataset.id);
+      q.value=chosen.name||chosen.email||''; pop.classList.add('hidden');
+      if(chosen.membership_id){ $('#am-plan').value=chosen.membership_id; $('#am-plan')._csSync&&$('#am-plan')._csSync(); }
+      $('#am-save').disabled=false;
+    });
+  });
+  $('#am-save').onclick=async()=>{
+    if(!chosen) return;
+    $('#am-save').disabled=true;
+    const ok=await dbUpdate('customers',chosen.id,{ membership_id:$('#am-plan').value, membership_expires:$('#am-exp').value||null, membership_flag:null });
+    if(!ok){ $('#am-save').disabled=false; return; }
+    closeSheet(); toast(`${chosen.name||'Customer'} is now a member`,'ok'); loadMembership();
+  };
+}
+$('#add-member').onclick=openAddMember;
+$('#add-plan').onclick=async()=>{ if(await dbInsert('memberships',{name:'New plan',price_cents:0,period:'month',discount_pct:0,color:'#c4e538',sort:MEMBERSHIPS.length})){ await loadVocab(); loadMembership(); } };
+
+/* ---------- Schedule (Day grid + side list · Week overview) ---------- */
+let BK = [];          // bookings for the current range (day or week)
+let VIEW = 'day';     // 'day' | 'week'
+let weekBay = null;   // bay shown in week view
+const dowOf = iso => new Date(iso+'T00:00:00').getDay();
+const dateLabel = iso => new Date(iso+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+const toISO = d => new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+function addDaysISO(iso,n){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return toISO(d); }
+const DOW_S = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MON_S = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function weekDates(iso){ const d=new Date(iso+'T00:00:00'); const s=new Date(d); s.setDate(d.getDate()-d.getDay());
+  return Array.from({length:7},(_,i)=>{ const x=new Date(s); x.setDate(s.getDate()+i); return toISO(x); }); }
+const shortDate = iso => { const d=new Date(iso+'T00:00:00'); return DOW_S[d.getDay()]+' '+d.getDate(); };
+
+// ----- Override helpers -----
+const ovOn = (o,iso) => iso>=o.override_date && iso<=(o.end_date||o.override_date);
+const ovForDate = iso => OVERRIDES.filter(o=>ovOn(o,iso));
+// Venue-wide override (all bays, whole day / special hours) for a date, or null.
+// A closure always wins over special hours; otherwise the latest one applies — matching the server.
+const venueOverride = iso => { const vs=ovForDate(iso).filter(o=>o.start_min==null && (!o.bay_ids||!o.bay_ids.length)); return vs.find(o=>o.is_closed) || vs[vs.length-1] || null; };
+// Block override covering a specific bay + minute (time-range blocks and bay-only closures).
+// An "Open" status override (status_open) colours the sheet but never blocks — it's skipped here.
+function findOvBlock(bayId, iso, m){
+  if(((SETTINGS.bays||[]).find(x=>x.id===bayId)||{}).holding) return null;   // holding bay is never blocked
+  return ovForDate(iso).find(o=>{
+    if(o.status_open) return false;
+    const bays=(o.bay_ids&&o.bay_ids.length)?o.bay_ids:null;
+    if(bays && !bays.includes(bayId)) return false;
+    if(o.start_min!=null){
+      const s = iso===o.override_date ? o.start_min : 0;                 // multi-day block runs continuously
+      const e = iso===(o.end_date||o.override_date) ? o.end_min : 24*60;
+      return m>=s && m<e;
+    }
+    return !!bays && o.is_closed;      // bay-specific all-day closure
+  }) || null;
+}
+
+// ---- Tee-sheet status painting ----
+// Every open slot shows its $/hr; a painted status (weekly pattern or a one-off override)
+// tints the cell with its colour. "Open" statuses stay bookable + priced; "Closed" ones go
+// red with no price and can't be booked. Precedence: date override > weekly pattern > default Open.
+const STATUS_GREEN='#4ec06a', STATUS_RED='#ff5b5b';
+function norm6(h){ h=(h||'').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); if(!/^[0-9a-fA-F]{6}$/.test(h)) h='4ec06a'; return '#'+h; }
+function readableOn(hex){ const h=norm6(hex).slice(1); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return (0.2126*r+0.7152*g+0.0722*b) < 96 ? '#d8d8d8' : norm6(hex); }
+
+// Weekly-pattern status for a bay at a minute (client mirror of lib/booking.js weeklyStatusAt).
+function weeklyStatusAt(weekday, bayId, m){
+  const ws=(SETTINGS&&SETTINGS.weekly_status)||{}; const bands=ws[weekday]||ws[String(weekday)]||[];
+  let hit=null;
+  for(const b of (Array.isArray(bands)?bands:[])){
+    const bays=(Array.isArray(b.bays)&&b.bays.length)?b.bays:null;
+    if(bays && !bays.includes(bayId)) continue;
+    const s=b.full?0:Number(b.start), e=b.full?1440:Number(b.end);
+    if(!isFinite(s)||!isFinite(e)) continue;
+    if(m>=s && m<e) hit=b;      // last matching band wins
+  }
+  return hit ? { label:hit.label||'', color:hit.color||null, open:hit.open!==false, full:!!hit.full } : null;
+}
+
+// Date-specific "Open" status override covering a cell (paints colour, stays bookable).
+function findOvStatusOpen(bayId, iso, m){
+  if(((SETTINGS.bays||[]).find(x=>x.id===bayId)||{}).holding) return null;
+  return ovForDate(iso).find(o=>{
+    if(!o.status_open) return false;
+    const bays=(o.bay_ids&&o.bay_ids.length)?o.bay_ids:null;
+    if(bays && !bays.includes(bayId)) return false;
+    if(o.start_min==null) return true;
+    const s=iso===o.override_date?o.start_min:0, e=iso===(o.end_date||o.override_date)?o.end_min:1440;
+    return m>=s && m<e;
+  }) || null;
+}
+
+// Effective status for an empty (non-booked, non-blocked) cell.
+// Returns { kind:'open'|'closed', color, label, price } — price (# / hr) only when open.
+function cellStatus(bayId, iso, m){
+  const holding=((SETTINGS.bays||[]).find(x=>x.id===bayId)||{}).holding;
+  const wd=dowOf(iso), price = holding ? null : (rateForBay(bayId, wd, Math.floor(m/60))||0);
+  const op=findOvStatusOpen(bayId, iso, m);
+  if(op) return { kind:'open', color:op.status_color||STATUS_GREEN, label:op.note||'', price };
+  const wk = holding ? null : weeklyStatusAt(wd, bayId, m);
+  if(wk) return wk.open ? { kind:'open', color:wk.color||STATUS_GREEN, label:wk.full?'':wk.label, price }
+                        : { kind:'closed', color:wk.color||STATUS_RED, label:wk.label||'Closed', price:null };
+  return { kind:'open', color: holding?null:STATUS_GREEN, label:'', price };   // default Open
+}
+
+// The <td> for a non-booked cell: a closed block/status, or an open+priced slot. iso is the cell's date.
+function openCellTD(b, iso, m){
+  const hc=b.holding?' holdcell':'';
+  const dd=iso?` data-date="${iso}"`:'';
+  const blk=findOvBlock(b.id, iso, m);
+  if(blk){
+    const col=blk.status_color?norm6(blk.status_color):null;
+    const sty=col?` style="background:${col}1f;border-color:${col}66;color:${readableOn(col)}"`:'';
+    return `<td class="cell ovr" data-ovid="${blk.id}"${sty}><span class="nm">${esc(blk.note||'Closed')}</span></td>`;
+  }
+  const st=cellStatus(b.id, iso, m);
+  if(st.kind==='closed'){
+    const col=norm6(st.color);
+    return `<td class="cell shut${hc}" style="background:${col}1f;border-color:${col}66;color:${readableOn(col)}"><span class="nm">${esc(st.label||'Closed')}</span></td>`;
+  }
+  if(b.holding) return `<td class="cell open holdcell" data-bay="${b.id}" data-min="${m}"${dd}>+</td>`;
+  const col=norm6(st.color||STATUS_GREEN);
+  const priceHtml = st.price!=null ? `<span class="price">$${st.price}</span><span class="per">/hr</span>` : '+';
+  const lbl = st.label ? `<span class="slbl">${esc(st.label)}</span>` : '';
+  return `<td class="cell open sprice" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}12;border-color:${col}3a;color:${readableOn(col)}">${priceHtml}${lbl}</td>`;
+}
+
+// effective open/close for a specific date, honouring venue-wide overrides
+function hoursForDate(iso){
+  const o=venueOverride(iso);
+  if(o) return o.is_closed ? [0,0] : [o.open_hour||0, o.close_hour||0];
+  return SETTINGS.hours[dowOf(iso)]||[0,0];
+}
+
+$('#day-prev').onclick = ()=>shiftDay(-1);
+$('#day-next').onclick = ()=>shiftDay(1);
+$('#day-today').onclick = ()=>{ $('#bk-date').value=todayISO(); dpSync('#bk-date'); loadSchedule(); };
+$('#bk-date').addEventListener('change', loadSchedule);
+function shiftDay(n){ const step=VIEW==='week'?7:1; const d=new Date($('#bk-date').value+'T00:00:00'); d.setDate(d.getDate()+n*step); $('#bk-date').value=toISO(d); dpSync('#bk-date'); loadSchedule(); }
+
+$('#view-toggle').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{
+  VIEW=btn.dataset.v;
+  $('#view-toggle').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
+  $('#day-layout').classList.toggle('week', VIEW==='week');
+  const wbWrap = $('#week-bay').closest('.cs-wrap') || $('#week-bay');
+  wbWrap.style.display = VIEW==='week' ? '' : 'none';
+  if(VIEW==='week'){ $('#week-bay').innerHTML=realBays().map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join(''); weekBay=weekBay||realBays()[0]?.id; $('#week-bay').value=weekBay; $('#week-bay')._csSync&&$('#week-bay')._csSync(); }
+  loadSchedule();
+});
+$('#week-bay').addEventListener('change', e=>{ weekBay=e.target.value; loadSchedule(); });
+
+async function loadOverridesFor(isos){
+  OVERRIDES=[];
+  const { data } = await sb.from('schedule_overrides').select('*').lte('override_date', isos[isos.length-1]).order('created_at');
+  OVERRIDES=(data||[]).filter(o=>o.is_active!==false && (o.end_date||o.override_date)>=isos[0]);
+}
+
+async function loadSchedule(){
+  const date=$('#bk-date').value; if(!date) return;
+  if(VIEW==='week'){
+    const wk=weekDates(date), d1=new Date(wk[0]+'T00:00:00'), d2=new Date(wk[6]+'T00:00:00');
+    $('#day-label').textContent = `${MON_S[d1.getMonth()]} ${d1.getDate()} – ${MON_S[d2.getMonth()]} ${d2.getDate()}`;
+    await loadOverridesFor(wk);
+    const { data, error } = await sb.from('bookings').select('*').gte('booking_date',wk[0]).lte('booking_date',wk[6]).neq('status','cancelled');
+    if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
+    BK=data||[]; renderOverrideBanner(null); updateStats(); $('#day-list-card').style.display='none'; renderWeek(wk);
+  } else {
+    $('#day-label').textContent = dateLabel(date);
+    await loadOverridesFor([date]);
+    const { data, error } = await sb.from('bookings').select('*').eq('booking_date',date).neq('status','cancelled').order('start_min');
+    if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
+    BK=data||[]; renderOverrideBanner(date); updateStats(); $('#day-list-card').style.display=''; renderGrid(); renderDayList();
+  }
+}
+
+function renderOverrideBanner(date){
+  const host=$('#ovr-banner-host'); const o=date?venueOverride(date):null;
+  if(!o){ host.innerHTML=''; return; }
+  host.innerHTML=`<div class="ovr-banner">Schedule override for this day — ${o.is_closed?'<b>Closed all day</b>':`special hours <b>${fmtMin((o.open_hour||0)*60)} – ${fmtMin((o.close_hour||0)*60)}</b>`}${o.note?` · ${esc(o.note)}`:''}. Manage in Schedule Overrides.</div>`;
+}
+
+function updateStats(){
+  const booked=BK.filter(b=>b.status!=='blocked').length, blocked=BK.filter(b=>b.status==='blocked').length;
+  const rev=BK.reduce((s,b)=>s+(b.source==='online'?(b.amount_cents||0):0),0);
+  $('#stat-booked').textContent=booked; $('#stat-blocked').textContent=blocked;
+  $('#stat-rev').textContent='$'+(rev/100).toFixed(rev%100?2:0);
+}
+
+const findBooking = (bayId,iso,m) => BK.find(b => b.bay_id===bayId && b.booking_date===iso && m>=b.start_min && m<b.end_min);
+const statusColor = label => (STATUSES.find(s=>s.label===label)||{}).color || '#4ec06a';
+const tagColor = name => (TAGS.find(t=>t.name===name)||{}).color || '#B5B5B5';
+// Compact status + tag indicators shown directly on a booking tile.
+function cellMeta(b, maxTags){
+  if(!b || b.status==='blocked') return '';
+  maxTags = maxTags==null ? 2 : maxTags;
+  let h='';
+  if(b.status_label){ const c=statusColor(b.status_label); h+=`<span class="stl" style="background:${c}22;color:${c};border:1px solid ${c}66" title="${esc(b.status_label)}">${esc(b.status_label)}</span>`; }
+  const tags=b.tags||[];
+  tags.slice(0,maxTags).forEach(t=>{ const c=tagColor(t); h+=`<span class="stl" style="background:${c}22;color:${c};border:1px solid ${c}66" title="${esc(t)}">${esc(t)}</span>`; });
+  if(tags.length>maxTags) h+=`<span class="stl stl-more" title="${esc(tags.slice(maxTags).join(', '))}">+${tags.length-maxTags}</span>`;
+  let out = h ? `<span class="cmeta">${h}</span>` : '';
+  if(b.note) out += `<span class="bnote" title="${esc(b.note)}">${esc(b.note)}</span>`;
+  return out;
+}
+
+function renderGrid(){
+  const date=$('#bk-date').value;
+  const [open,close]=hoursForDate(date);
+  const step=SETTINGS.slot_step||30;
+  if(!(close>open)){ $('#bk-grid').innerHTML='<div class="closed-note">Closed on this day'+(venueOverride(date)?' (schedule override)':' — set hours in Schedule Templates')+'.</div>'; return; }
+  let h='<table class="bkgrid"><thead><tr><th class="t"></th>';
+  SETTINGS.bays.forEach(b=> h+=`<th class="${b.holding?'hold-col':''}" title="${esc(b.description||'')}">${esc(b.name)}<small>${b.holding?'':esc(b.sim||'')}</small></th>`);
+  h+='</tr></thead><tbody>';
+  for(let m=open*60; m<close*60; m+=step){
+    h+=`<tr><td class="t">${fmtMin(m)}</td>`;
+    SETTINGS.bays.forEach(b=>{
+      const hc=b.holding?' holdcell':'';
+      const bk=findBooking(b.id,date,m);
+      if(bk){
+        const visStart=Math.max(bk.start_min, open*60);    // clamp to the day's effective open (special-hours override)
+        if(m!==visStart) return;                            // covered by the rowspan from its first visible row
+        const cls=bk.status==='blocked'?'bl':'bk';
+        const span=Math.max(1, Math.round((Math.min(bk.end_min, close*60)-visStart)/step));
+        h+=`<td class="cell ${cls}${hc}" rowspan="${span}" data-bid="${bk.id}" data-bay="${b.id}" data-min="${visStart}"><span class="nm">${bk.status==='blocked'?'Blocked':esc(bk.customer_name||'Booked')}</span>${cellMeta(bk)}</td>`;
+        return;
+      }
+      h+=openCellTD(b, date, m);
+    });
+    h+='</tr>';
+  }
+  $('#bk-grid').innerHTML=h+'</tbody></table>';
+  $('#bk-grid').querySelectorAll('.cell.open').forEach(c=>c.onclick=()=>openAdd(c.dataset.bay,+c.dataset.min,date));
+  $('#bk-grid').querySelectorAll('.cell[data-bid]').forEach(c=>c.onclick=()=>openManage(c.dataset.bid));
+  $('#bk-grid').querySelectorAll('.cell.ovr').forEach(c=>c.onclick=()=>openOverrideSheet(c.dataset.ovid));
+  wireGridDnD();
+}
+
+// Drag a booking (any of its cells) onto an open slot — or onto its own slots to nudge it — to move it.
+function wireGridDnD(){
+  const grid=$('#bk-grid'); let dragId=null;
+  grid.querySelectorAll('.cell[data-bid]').forEach(c=>{
+    c.setAttribute('draggable','true');
+    c.addEventListener('dragstart',e=>{ dragId=c.dataset.bid; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',dragId);
+      grid.querySelectorAll('.cell[data-bid="'+dragId+'"]').forEach(x=>x.classList.add('drag-src')); });
+    c.addEventListener('dragend',()=>{ grid.querySelectorAll('.drag-src,.drop-ok').forEach(x=>x.classList.remove('drag-src','drop-ok')); dragId=null; });
+  });
+  const canDrop=c=>c.classList.contains('open') || c.dataset.bid===dragId;   // empty slot, or the dragged booking's own slots
+  grid.querySelectorAll('.cell[data-min]').forEach(c=>{
+    c.addEventListener('dragover',e=>{ if(!canDrop(c)) return; e.preventDefault(); e.dataTransfer.dropEffect='move'; c.classList.add('drop-ok'); });
+    c.addEventListener('dragleave',()=>c.classList.remove('drop-ok'));
+    c.addEventListener('drop',e=>{ if(!canDrop(c)) return; e.preventDefault(); c.classList.remove('drop-ok');
+      const id=e.dataTransfer.getData('text/plain')||dragId;
+      if(id) gridDrop(id, c.dataset.bay, c.dataset.date||$('#bk-date').value, +c.dataset.min); });
+  });
+}
+
+// Validate a drop, then ask the manager to confirm the destination before saving.
+function gridDrop(id, bayId, dateISO, newStart){
+  const b=BK.find(x=>x.id===id); if(!b) return;
+  if(b.bay_id===bayId && b.booking_date===dateISO && b.start_min===newStart) return;   // dropped where it already is
+  const dur=b.end_min-b.start_min, newEnd=newStart+dur;
+  const targetBay=(SETTINGS.bays||[]).find(x=>x.id===bayId);
+  const holding=targetBay&&targetBay.holding;
+  if(!holding){
+    const [open,close]=hoursForDate(dateISO);
+    if(newStart<open*60 || newEnd>close*60){ toast('That would fall outside opening hours','err'); return; }
+  }
+  const clash=BK.some(x=>x.id!==id && x.bay_id===bayId && x.booking_date===dateISO && newStart<x.end_min && newEnd>x.start_min);
+  if(clash){ toast('That overlaps another booking','err'); return; }
+  if(!holding){
+    const step=SETTINGS.slot_step||30;
+    for(let m=newStart;m<newEnd;m+=step){
+      const ov=findOvBlock(bayId,dateISO,m);
+      if(ov){ toast(`That time is blocked — ${ov.note||'schedule override'}`,'err'); return; }
+    }
+  }
+  const who = b.status==='blocked' ? 'Blocked time' : (b.customer_name || 'Booking');
+  const sameBay = bayId===b.bay_id;
+  confirmSheet({
+    title: holding?'Park this booking?':'Move this booking?',
+    body: `<div style="font-weight:700;color:#fff;font-size:15px;margin-bottom:10px">${esc(who)}</div>
+      <div class="kv"><span class="k">Bay</span><span>${esc(targetBay?targetBay.name:bayId)}${sameBay?'':' <span class="dim">(was '+esc(bayName(b.bay_id))+')</span>'}</span></div>
+      <div class="kv"><span class="k">Time</span><span>${fmtMin(newStart)} – ${fmtMin(newEnd)}</span></div>
+      <div class="kv" style="border:none"><span class="k">Date</span><span>${dateLabel(dateISO)}</span></div>`,
+    okLabel: holding?'Park booking':'Move booking',
+    onOk: async ()=>{
+      const { error } = await sb.from('bookings').update({bay_id:bayId, booking_date:dateISO, start_min:newStart, end_min:newEnd}).eq('id',id);
+      if(error){ if(!isAuthError(error)) toast(/overlap|23P01/i.test(error.message)?'That overlaps an existing booking.':('Move failed: '+error.message),'err'); return; }
+      toast(holding?'Booking parked':`Moved to ${fmtMin(newStart)}${sameBay?'':' · '+(targetBay?targetBay.name:bayId)}`,'ok'); loadSchedule();
+    }
+  });
+}
+
+function confirmSheet({title, body, okLabel, onOk}){
+  const co=$('#confirm-overlay'), cs=$('#confirm-sheet');
+  cs.innerHTML=`<button class="sheet-close" id="cfx">✕</button>
+    <h3>${esc(title)}</h3>
+    <div class="sub" style="margin:6px 0 4px;line-height:1.5">${body}</div>
+    <div class="row" style="gap:10px;margin-top:18px">
+      <button class="btn btn-ghost" id="cf-no" style="flex:1">Cancel</button>
+      <button class="btn btn-primary" id="cf-yes" style="flex:1">${esc(okLabel||'Confirm')}</button></div>`;
+  co.classList.add('show');
+  const close=()=>{ co.classList.remove('show'); cs.innerHTML=''; };
+  $('#cfx').onclick=close; $('#cf-no').onclick=close; co.onclick=e=>{ if(e.target===co) close(); };
+  $('#cf-yes').onclick=()=>{ close(); onOk&&onOk(); };
+}
+
+function renderWeek(days){
+  const bay=weekBay||realBays()[0]?.id;
+  const step=SETTINGS.slot_step||30;
+  let minO=99,maxC=0;
+  days.forEach(iso=>{ const [o,c]=hoursForDate(iso); if(c>o){ minO=Math.min(minO,o); maxC=Math.max(maxC,c); } });
+  if(maxC<=minO){ $('#bk-grid').innerHTML='<div class="closed-note">No open hours this week.</div>'; return; }
+  let h='<table class="bkgrid"><thead><tr><th class="t"></th>';
+  days.forEach(iso=> h+=`<th>${shortDate(iso)}${ovForDate(iso).length?'<small style="color:#e0796f">override</small>':''}</th>`);
+  h+='</tr></thead><tbody>';
+  for(let m=minO*60; m<maxC*60; m+=step){
+    h+=`<tr><td class="t">${fmtMin(m)}</td>`;
+    days.forEach(iso=>{
+      const [o,c]=hoursForDate(iso);
+      if(!(c>o) || m<o*60 || m>=c*60){ h+=`<td class="cell closed"></td>`; return; }
+      const bk=findBooking(bay,iso,m);
+      if(bk){
+        const visStart=Math.max(bk.start_min, o*60);       // clamp to this day's effective open
+        if(m!==visStart) return;                            // covered by the rowspan from its first visible row
+        const cls=bk.status==='blocked'?'bl':'bk';
+        const span=Math.max(1, Math.round((Math.min(bk.end_min, c*60)-visStart)/step));
+        h+=`<td class="cell ${cls}" rowspan="${span}" data-bid="${bk.id}" data-bay="${bay}" data-min="${visStart}" data-date="${iso}"><span class="nm">${bk.status==='blocked'?'Block':esc(bk.customer_name||'Booked')}</span>${cellMeta(bk)}</td>`;
+        return;
+      }
+      h+=openCellTD((SETTINGS.bays||[]).find(x=>x.id===bay)||{id:bay}, iso, m);
+    });
+    h+='</tr>';
+  }
+  $('#bk-grid').innerHTML=h+'</tbody></table>';
+  $('#bk-grid').querySelectorAll('.cell.open').forEach(c=>c.onclick=()=>openAdd(c.dataset.bay,+c.dataset.min,c.dataset.date));
+  $('#bk-grid').querySelectorAll('.cell[data-bid]').forEach(c=>c.onclick=()=>openManage(c.dataset.bid));
+  $('#bk-grid').querySelectorAll('.cell.ovr').forEach(c=>c.onclick=()=>openOverrideSheet(c.dataset.ovid));
+  wireGridDnD();
+}
+
+function renderDayList(){
+  const items=[...BK].sort((a,b)=>a.start_min-b.start_min);
+  if(!items.length){ $('#day-list').innerHTML='<div class="empty">Nothing booked yet.</div>'; return; }
+  $('#day-list').innerHTML=items.map(b=>{
+    const bl=b.status==='blocked';
+    return `<div class="gcard ${bl?'bl':''}" data-id="${b.id}">
+      <div class="g-t"><span class="dot ${bl?'bl':'bk'}"></span>${fmtMin(b.start_min)} – ${fmtMin(b.end_min)}</div>
+      <div class="g-s">${esc(bayName(b.bay_id))} · ${bl?'Blocked':esc(b.customer_name||'Booked')}</div>
+      ${cellMeta(b,3)}
+    </div>`;
+  }).join('');
+  $('#day-list').querySelectorAll('.gcard').forEach(el=>el.onclick=()=>openManage(el.dataset.id));
+}
+
+/* ---------- Slot sheet ---------- */
+const overlay=$('#slot-overlay'), sheet=$('#slot-sheet');
+function closeSheet(){ overlay.classList.remove('show'); sheet.innerHTML=''; sheet.classList.remove('res-wide'); }
+overlay.addEventListener('click',e=>{ if(e.target===overlay) closeSheet(); });
+document.addEventListener('keydown',e=>{ if(e.key!=='Escape') return;
+  if($('#confirm-overlay').classList.contains('show')){ $('#confirm-overlay').classList.remove('show'); $('#confirm-sheet').innerHTML=''; }
+  else if($('#px-overlay').classList.contains('show')) closePx();
+  else if($('#cust-overlay').classList.contains('show')) closeQuickAdd();
+  else closeSheet(); });
+
+/* ---------- Quick-add customer popup (used by booking autocomplete) ---------- */
+function closeQuickAdd(){ $('#cust-overlay').classList.remove('show'); $('#cust-sheet').innerHTML=''; }
+function quickAddCustomer(prefill, onSaved){
+  const co=$('#cust-overlay'), cs=$('#cust-sheet');
+  cs.innerHTML=`
+    <button class="sheet-close" id="cax">✕</button>
+    <h3>New customer</h3>
+    <div class="sub">Add their details to the customer database.</div>
+    <div class="field"><label>Name</label><input class="input" id="ca-name" value="${esc(prefill.name||'')}" autocomplete="off" autocorrect="off" spellcheck="false" /></div>
+    <div class="field"><label>Phone</label><input class="input" id="ca-phone" value="${esc(prefill.phone||'')}" placeholder="Optional" autocomplete="off" /></div>
+    <div class="field"><label>Email</label><input class="input" id="ca-email" value="${esc(prefill.email||'')}" placeholder="Optional" autocomplete="off" /></div>
+    <div class="field"><label>Membership</label><select class="input" id="ca-plan"><option value="">— none —</option>${MEMBERSHIPS.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+    <div class="field"><label>Notes</label><input class="input" id="ca-notes" placeholder="Optional" autocomplete="off" /></div>
+    <button class="btn btn-primary" id="ca-save" style="width:100%;margin-top:4px">Add customer</button>`;
+  co.classList.add('show');
+  $('#cax').onclick=closeQuickAdd;
+  co.onclick=e=>{ if(e.target===co) closeQuickAdd(); };
+  $('#ca-name').focus();
+  $('#ca-save').onclick=async()=>{
+    const name=$('#ca-name').value.trim(); if(!name){ toast('Enter a name','err'); return; }
+    const payload={ name, phone:$('#ca-phone').value.trim()||null, email:$('#ca-email').value.trim()||null,
+      membership_id:$('#ca-plan').value||null, notes:$('#ca-notes').value.trim()||null };
+    $('#ca-save').disabled=true;
+    const { data, error } = await sb.from('customers').insert(payload).select().single();
+    $('#ca-save').disabled=false;
+    if(error){ if(!isAuthError(error)) toast(/duplicate|unique/i.test(error.message)?'A customer with that email already exists.':error.message,'err'); return; }
+    CUSTOMERS.push(data); toast('Customer added to database','ok'); closeQuickAdd(); onSaved&&onSaved(data);
+  };
+}
+
+function endChoices(bayId,startMin,dateISO){
+  const [,close]=hoursForDate(dateISO); const step=SETTINGS.slot_step||30;
+  let next=startMin; while(next<close*60 && !findBooking(bayId,dateISO,next) && !findOvBlock(bayId,dateISO,next)) next+=step;
+  const opts=[]; for(let e=startMin+step; e<=next; e+=step) opts.push(e);
+  return opts;
+}
+
+// Override tile click — details + quick disable/remove (full editing lives in Schedule Overrides).
+function openOverrideSheet(id){
+  const o=OVERRIDES.find(x=>String(x.id)===String(id)); if(!o) return;
+  const scope=(o.bay_ids&&o.bay_ids.length)?o.bay_ids.map(x=>esc(bayName(x))).join(', '):'All bays';
+  const when=o.start_min!=null?`${fmtMin(o.start_min)} – ${fmtMin(o.end_min)}`:(o.is_closed?'All day':'Special hours');
+  const dates=(o.end_date&&o.end_date!==o.override_date)?`${dateLabel(o.override_date)} – ${dateLabel(o.end_date)}`:dateLabel(o.override_date);
+  sheet.innerHTML=`
+    <button class="sheet-close" id="x">✕</button>
+    <h3>${esc(o.note||'Blocked time')} <span class="pill blocked">Override</span></h3>
+    <div class="sub">This time is blocked on the schedule.</div>
+    <div class="kv"><span class="k">Date</span><span>${dates}</span></div>
+    <div class="kv"><span class="k">Time</span><span>${when}</span></div>
+    <div class="kv" style="border:none"><span class="k">Bays</span><span style="text-align:right;max-width:240px">${scope}</span></div>
+    <div class="row" style="gap:10px;margin-top:18px">
+      <button class="btn btn-ghost" id="ovs-off" style="flex:1">Disable override</button>
+      <button class="btn btn-danger" id="ovs-del" style="flex:1">Remove</button>
+    </div>
+    <div class="dim" style="font-size:12px;margin-top:12px">Edit details in the Schedule Overrides tab.</div>`;
+  overlay.classList.add('show');
+  $('#x').onclick=closeSheet;
+  $('#ovs-off').onclick=async()=>{ if(await dbUpdate('schedule_overrides',o.id,{is_active:false})){ closeSheet(); toast('Override disabled — slots reopened','ok'); loadSchedule(); } };
+  $('#ovs-del').onclick=async()=>{ if(await dbDelete('schedule_overrides',o.id)){ closeSheet(); toast('Override removed','ok'); loadSchedule(); } };
+}
+
+// One-click "paint a status" over the tee sheet — all bays or some, whole day or a time range,
+// a single day or a date range. Writes one schedule_override that sits on top of the weekly base.
+let AP_BAYS=new Set(['']);   // '' = all bays
+function apRenderBays(){
+  const all=AP_BAYS.has('');
+  const host=sheet.querySelector('#ap-bays'); if(!host) return;
+  host.innerHTML=`<span class="bp ${all?'on':''}" data-b="">All bays</span>`+
+    realBays().map(b=>`<span class="bp ${AP_BAYS.has(b.id)?'on':''}" data-b="${b.id}">${esc(b.name)}</span>`).join('');
+  host.querySelectorAll('.bp').forEach(el=>el.onclick=()=>{
+    const id=el.dataset.b;
+    if(id===''){ AP_BAYS=new Set(['']); }
+    else { AP_BAYS.delete(''); if(AP_BAYS.has(id)) AP_BAYS.delete(id); else AP_BAYS.add(id); if(!AP_BAYS.size) AP_BAYS=new Set(['']); }
+    apRenderBays();
+  });
+}
+function openApplyStatus(){
+  const ss=scheduleStatuses();
+  if(!ss.length){ toast('Add a schedule status first — see the Statuses tab.','err'); return; }
+  AP_BAYS=new Set(['']);
+  const date=$('#bk-date').value||todayISO();
+  let cover='day';   // 'day' | 'range'
+  sheet.innerHTML=`
+    <button class="sheet-close" id="x">✕</button>
+    <h3>Apply a status</h3>
+    <div class="sub">Paint a status across the tee sheet. It sits on top of the weekly pattern for the day(s) you choose.</div>
+    <div class="field" style="margin-top:16px"><label>Status</label>
+      <div class="row" style="gap:10px;align-items:center">
+        <span class="ap-dot" id="ap-dot"></span>
+        <select class="input" id="ap-status" style="flex:1">${ss.map(s=>`<option value="${s.id}" data-color="${esc(s.color||'')}" data-open="${s.kind!=='closed'?1:0}">${esc(s.label)} ${s.kind==='closed'?'· closed':'· open'}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="field"><label>Bays</label><div class="bay-pick" id="ap-bays"></div></div>
+    <div class="field"><label>Time</label>
+      <div class="seg seg-sm" id="ap-cover" style="margin-bottom:10px">
+        <button data-c="day" class="on" type="button">Whole day</button>
+        <button data-c="range" type="button">Time range</button>
+      </div>
+      <div class="grid2" id="ap-time" style="display:none">
+        <div class="field" style="margin:0"><label>From</label><select class="input" id="ap-from">${minOptions(11*60)}</select></div>
+        <div class="field" style="margin:0"><label>To</label><select class="input" id="ap-to">${minOptions(13*60)}</select></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field" style="margin:0"><label>Start date</label><input class="input" id="ap-date" type="date" value="${date}" /></div>
+      <div class="field" style="margin:0"><label>End date (optional)</label><input class="input" id="ap-end" type="date" /></div>
+    </div>
+    <button class="btn btn-primary" id="ap-apply" style="width:100%;margin-top:8px">Apply status</button>`;
+  overlay.classList.add('show');
+  $('#x').onclick=closeSheet;
+  apRenderBays();
+  enhanceSelects(sheet);
+  dpSync('#ap-date'); dpSync('#ap-end');
+  const dot=sheet.querySelector('#ap-dot'), stSel=sheet.querySelector('#ap-status');
+  const syncDot=()=>{ const o=stSel.options[stSel.selectedIndex]; dot.style.background=norm6(o?o.dataset.color:''); };
+  stSel.addEventListener('change',syncDot); syncDot();
+  sheet.querySelector('#ap-cover').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{
+    cover=btn.dataset.c; sheet.querySelector('#ap-cover').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
+    sheet.querySelector('#ap-time').style.display = cover==='range'?'grid':'none';
+  });
+  $('#ap-apply').onclick=async()=>{
+    const o=stSel.options[stSel.selectedIndex];
+    const label=(o.textContent||'').replace(/ · (closed|open)$/,'').trim();
+    const open=o.dataset.open==='1', color=o.dataset.color||null;
+    const sd=$('#ap-date').value; if(!sd){ toast('Pick a start date','err'); return; }
+    const ed=$('#ap-end').value||null; if(ed && ed<sd){ toast('End date is before the start date','err'); return; }
+    let start=0, end=24*60;
+    if(cover==='range'){ start=+$('#ap-from').value; end=+$('#ap-to').value; if(!(end>start)){ toast('End time must be after the start time','err'); return; } }
+    const row={ override_date:sd, end_date:ed, note:label, is_active:true,
+      bay_ids: AP_BAYS.has('')?[]:[...AP_BAYS],
+      status_open:open, status_color:color,
+      is_closed:false, open_hour:null, close_hour:null, start_min:start, end_min:end };
+    $('#ap-apply').disabled=true;
+    const { error } = await sb.from('schedule_overrides').insert(row);
+    $('#ap-apply').disabled=false;
+    if(error){ if(!isAuthError(error)) toast(/status_open|status_color|column/i.test(error.message)?'Run database migration 0009 (supabase/migrations) first.':error.message,'err'); return; }
+    closeSheet(); toast(`“${label}” applied${ed?' across the date range':''}`,'ok'); loadSchedule();
+  };
+}
+$('#apply-status').onclick=openApplyStatus;
+
+function openAdd(bayId,startMin,dateISO){
+  const ends=endChoices(bayId,startMin,dateISO);
+  if(!ends.length){ toast('No free time right after this slot','err'); return; }
+  const def = ends.includes(startMin+60)?startMin+60:ends[ends.length-1];
+  let type='confirmed';
+  sheet.innerHTML=`
+    <button class="sheet-close" id="x">✕</button>
+    <h3>New booking</h3>
+    <div class="sub">${esc(bayName(bayId))} · ${dateLabel(dateISO)}</div>
+    <div class="seg" id="seg" style="margin:18px 0 16px">
+      <button data-t="confirmed" class="on">Booking</button>
+      <button data-t="blocked">Block off</button>
+    </div>
+    <div class="time-row">
+      <div class="field" style="margin:0"><label>Starts</label><div class="static-val">${fmtMin(startMin)}</div></div>
+      <div class="field" style="margin:0"><label>Ends</label>
+        <select class="input" id="s-end">${ends.map(e=>`<option value="${e}" ${e===def?'selected':''}>${fmtMin(e)}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div id="cust">
+      <div class="field ac-wrap">
+        <label>Customer name</label>
+        <input class="input" id="s-name" placeholder="Search or add a customer" autocomplete="off" />
+        <div class="ac-pop hidden" id="s-ac"></div>
+      </div>
+      <div class="field"><label>Phone / email</label><input class="input" id="s-contact" placeholder="Optional" autocomplete="off" /></div>
+    </div>
+    <div class="field"><label>Note</label><textarea class="input" id="s-note" rows="2" placeholder="Optional"></textarea></div>
+    <button class="btn btn-primary" id="s-add" style="width:100%;margin-top:4px">Add to schedule</button>`;
+  overlay.classList.add('show');
+  $('#x').onclick=closeSheet;
+  enhanceSelects(sheet);
+  $('#seg').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{
+    type=btn.dataset.t; $('#seg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
+    $('#cust').style.display = type==='blocked'?'none':'block';
+  });
+  // Customer autocomplete: match the database as you type; quick-add inline if not found.
+  const nameInp=$('#s-name'), contactInp=$('#s-contact'), acPop=$('#s-ac');
+  function renderAC(){
+    const term=nameInp.value.trim().toLowerCase();
+    if(!term){ acPop.classList.add('hidden'); acPop.innerHTML=''; return; }
+    const matches=CUSTOMERS.filter(c=>[c.name,c.email,c.phone].some(x=>(x||'').toLowerCase().includes(term))).slice(0,6);
+    const exact=CUSTOMERS.some(c=>(c.name||'').toLowerCase()===term);
+    let html=matches.map(c=>`<div class="ac-item" data-id="${c.id}"><span>${esc(c.name||'(no name)')}</span>${(c.email||c.phone)?`<span class="ac-sub">${esc(c.email||c.phone)}</span>`:''}</div>`).join('');
+    if(!exact) html+=`<div class="ac-item ac-add" data-add="1">+ Add “${esc(nameInp.value.trim())}” as a new customer</div>`;
+    acPop.innerHTML=html; acPop.classList.remove('hidden');
+    acPop.querySelectorAll('.ac-item[data-id]').forEach(el=>el.onclick=()=>{
+      const c=CUSTOMERS.find(x=>x.id===el.dataset.id); if(!c) return;
+      nameInp.value=c.name||''; contactInp.value=c.phone||c.email||''; acPop.classList.add('hidden');
+    });
+    const addEl=acPop.querySelector('[data-add]');
+    if(addEl) addEl.onclick=()=>{
+      const name=nameInp.value.trim(); if(!name) return;
+      const contact=contactInp.value.trim();
+      acPop.classList.add('hidden');
+      quickAddCustomer({ name, phone: contact.includes('@')?'':contact, email: contact.includes('@')?contact:'' }, c=>{
+        nameInp.value=c.name||''; contactInp.value=c.phone||c.email||'';
+      });
+    };
+  }
+  nameInp.addEventListener('input', renderAC);
+  nameInp.addEventListener('focus', renderAC);
+  $('#s-add').onclick=async()=>{
+    const date=dateISO, end_min=+$('#s-end').value;
+    const contact=($('#s-contact')?.value||'').trim();
+    const row={ bay_id:bayId, booking_date:date, start_min:startMin, end_min, status:type, source:'manager',
+      customer_name: type==='blocked'?null:(($('#s-name')?.value||'').trim()||null),
+      customer_phone: contact.includes('@')?null:(contact||null),
+      customer_email: contact.includes('@')?contact:null,
+      note: ($('#s-note')?.value||'').trim()||null };
+    $('#s-add').disabled=true;
+    let r=await sb.from('bookings').insert(row);
+    if(r.error && /note/.test(r.error.message||'')){ delete row.note; r=await sb.from('bookings').insert(row); }
+    $('#s-add').disabled=false;
+    if(r.error){ toast(r.error.code==='23P01'||/overlap/i.test(r.error.message)?'That overlaps an existing booking.':('Failed: '+r.error.message),'err'); return; }
+    closeSheet(); toast(type==='blocked'?'Time blocked':'Booking added','ok'); loadSchedule();
+  };
+}
+
+// ----- Reservation details helpers -----
+function rateForBay(bayId, weekday, hour){
+  const r=(SETTINGS.bay_rates||{})[bayId]||SETTINGS.rates||{};
+  const weekend=weekday===0||weekday===6;
+  return rateFromBands(bandsOf(r), weekend, hour);
+}
+function bookingPriceCents(b){
+  const wd=new Date(b.booking_date+'T00:00:00').getDay(); const step=SETTINGS.slot_step||30; let c=0;
+  for(let m=b.start_min;m<b.end_min;m+=step) c+=Math.round((rateForBay(b.bay_id,wd,Math.floor(m/60))||0)*100/(60/step));
+  return c;
+}
+function matchCustomer(b){
+  const email=(b.customer_email||'').trim().toLowerCase(), phone=(b.customer_phone||'').trim(), name=(b.customer_name||'').trim().toLowerCase();
+  return CUSTOMERS.find(c=> (email&&c.email&&c.email.trim().toLowerCase()===email) || (phone&&c.phone&&c.phone.trim()===phone) || (name&&c.name&&c.name.trim().toLowerCase()===name) );
+}
+
+function openManage(id){
+  const b=BK.find(x=>x.id===id); if(!b) return;
+  const isBlock=b.status==='blocked';
+  const conf=(b.id||'').replace(/-/g,'').slice(0,8).toUpperCase();
+  const statusOpts=`<option value="">— none —</option>`+STATUSES.map(s=>`<option ${b.status_label===s.label?'selected':''}>${esc(s.label)}</option>`).join('');
+  const selTags=new Set(b.tags||[]);
+  const pay=(SETTINGS.pay)||{}; const taxPct=pay.taxPct||0; const cur=pay.currency||'CAD';
+  const fmt=c=>cur+' $'+((c||0)/100).toFixed(2);
+  const onlinePaid=(b.amount_cents||0)>0;
+  const sub = onlinePaid ? b.amount_cents : bookingPriceCents(b);
+  const taxAmt=Math.round(sub*taxPct/100), total=sub+taxAmt;
+  const acceptDep = pay.acceptDeposit!==false && pay.captureMethod!=='No Payment';
+  const held = pay.chargeAmount ? Math.round(pay.chargeAmount*100) : Math.round(sub*(pay.chargePercent||0)/100);
+  const baySim=(SETTINGS.bays.find(x=>x.id===b.bay_id)||{}).sim;
+  const cust=matchCustomer(b);
+  const statusPill = isBlock?'<span class="pill blocked">Blocked</span>'
+    :(onlinePaid?'<span class="pill confirmed">Paid</span>':'<span class="pill manager">Confirmed</span>');
+
+  if(isBlock){
+    sheet.innerHTML=`
+      <button class="sheet-close" id="x">✕</button>
+      <h3>Blocked time ${statusPill}</h3>
+      <div class="sub">Manager block</div>
+      <div class="kv"><span class="k">Bay</span><span>${esc(bayName(b.bay_id))}</span></div>
+      <div class="kv"><span class="k">Date</span><span>${dateLabel(b.booking_date)}</span></div>
+      <div class="kv" style="border:none"><span class="k">Time</span><span>${fmtMin(b.start_min)} – ${fmtMin(b.end_min)}</span></div>
+      ${b.note?`<div class="kv" style="border:none"><span class="k">Note</span><span style="text-align:right;max-width:220px">${esc(b.note)}</span></div>`:''}
+      <button class="btn btn-danger" id="s-cancel" style="width:100%;margin-top:18px">Remove block</button>`;
+    overlay.classList.add('show'); $('#x').onclick=closeSheet;
+    $('#s-cancel').onclick=async()=>{
+      let r=await sb.from('bookings').update({status:'cancelled',cancelled_at:new Date().toISOString()}).eq('id',id);
+      if(r.error && /cancelled_at/.test(r.error.message||'')) r=await sb.from('bookings').update({status:'cancelled'}).eq('id',id);
+      if(r.error){ toast('Failed: '+r.error.message,'err'); return; }
+      closeSheet(); toast('Removed — slot freed','ok'); loadSchedule();
+    };
+    return;
+  }
+
+  const payLine = onlinePaid
+    ? `<div class="kv"><span class="k">Paid online</span><span class="pill confirmed">Paid ${fmt(sub)}</span></div>`
+    : acceptDep
+      ? `<div class="kv"><span class="k">Deposit held</span><span>${fmt(held)} <span class="dim">(${pay.chargeAmount?'flat':((pay.chargePercent||0)+'%')})</span></span></div>`
+      : `<div class="kv"><span class="k">Payment</span><span class="dim">No payment collected</span></div>`;
+  const cardLine = `<div class="kv" style="border:none"><span class="k">Card</span><span class="dim">${onlinePaid?'On file · charged':'No card on file'}</span></div>`;
+  const showHoldBtns = onlinePaid || acceptDep;
+  const txn = onlinePaid
+    ? `<div class="txn-row"><span>Payment received</span><span class="dim">${fmt(total)} · ${fmtTs(b.created_at)}</span></div>`
+    : acceptDep
+      ? `<div class="txn-row"><span>Hold placed</span><span class="dim">${fmt(held)} · ${fmtTs(b.created_at)}</span></div>`
+      : `<div class="dim" style="font-size:13px;padding:6px 0">No transactions yet.</div>`;
+
+  sheet.innerHTML=`
+    <button class="sheet-close" id="x">✕</button>
+    <h3>Reservation ${statusPill}</h3>
+    <div class="sub">Confirmation ${conf} · ${esc(b.source||'')}</div>
+
+    <div class="res-grid">
+     <div class="res-col">
+    <div class="field" style="margin-top:14px"><label>Status</label>
+      <select class="input" id="m-status">${statusOpts}</select></div>
+
+    <div class="kv"><span class="k">Date</span><span>${dateLabel(b.booking_date)}</span></div>
+    <div class="kv"><span class="k">Time</span><span>${fmtMin(b.start_min)} – ${fmtMin(b.end_min)}</span></div>
+    <div class="kv" style="border:none"><span class="k">Bay</span><span>${esc(bayName(b.bay_id))}${baySim?` <span class="dim">· ${esc(baySim)}</span>`:''}</span></div>
+
+    <div class="sec-h">Charges</div>
+    <div class="pay-box">
+      <div class="kv"><span class="k">Sub-total</span><span>${fmt(sub)}</span></div>
+      <div class="kv"><span class="k">Tax (${taxPct}%)</span><span>${fmt(taxAmt)}</span></div>
+      <div class="kv" style="border:none"><span class="k" style="color:#fff;font-weight:700">Total</span><span style="font-weight:700">${fmt(total)}</span></div>
+    </div>
+
+    <div class="sec-h">Payments</div>
+    <div class="pay-box">${payLine}${cardLine}</div>
+    ${showHoldBtns?`<div class="row" style="margin-top:10px;flex-wrap:nowrap;gap:8px">
+      <button class="btn btn-ghost btn-sm" id="cap-hold" style="flex:1">Capture held funds</button>
+      <button class="btn btn-ghost btn-sm" id="cancel-hold" style="flex:1">Cancel hold</button>
+    </div>
+    <button class="btn btn-ghost btn-sm" id="cap-total" style="width:100%;margin-top:8px">Capture total balance</button>`:''}
+
+    <div class="sec-h">Transactions</div>
+    <div class="txn">${txn}</div>
+     </div>
+     <div class="res-col">
+    <div class="sec-h" style="margin-top:0">Customer</div>
+    <div class="kv"><span class="k">Name</span><span>${esc(b.customer_name||'—')} <span class="rep hidden" id="m-rep"></span></span></div>
+    ${(b.customer_phone||b.customer_email)?`<div class="kv"><span class="k">Contact</span><span>${esc(b.customer_phone||'')}${(b.customer_phone&&b.customer_email)?' · ':''}${esc(b.customer_email||'')}</span></div>`:''}
+    ${(cust&&cust.membership_id)?`<div class="kv"><span class="k">Membership</span><span><span class="pill manager">${esc(planName(cust.membership_id))}</span>${(cust.membership_expires&&cust.membership_expires<todayLocalISO())?' <span class="exp expired">Expired '+shortDate2(cust.membership_expires)+'</span>':''}</span></div>`:''}
+    ${cust?`<div class="kv"><span class="k">Waiver</span><span>${cust.waiver_code?`<span class="wv-code">${esc(cust.waiver_code)}</span>`:'<span class="dim">Not on file</span>'}</span></div>`:''}
+    ${(cust&&cust.notes)?`<div class="kv" style="border:none"><span class="k">Latest note</span><span style="text-align:right;max-width:220px">${esc(cust.notes)}</span></div>`:''}
+
+    <div class="field" style="margin-top:16px"><label>Tags</label>
+      <div class="chips" id="m-tags">${TAGS.map(t=>`<span class="chip ${selTags.has(t.name)?'on':''}" data-tag="${esc(t.name)}" style="${selTags.has(t.name)?`border-color:${t.color};color:#fff`:''}">${esc(t.name)}</span>`).join('')||'<span class="dim" style="font-size:13px">No tags yet — add some in the Tags tab.</span>'}</div></div>
+    <div class="field"><label>Note</label><textarea class="input" id="m-note" rows="2" placeholder="Add a note for this booking">${esc(b.note||'')}</textarea></div>
+    ${b.status==='confirmed'?`<div class="field" style="margin-bottom:0"><label>Customer self-service link (texted via SMS)</label>
+      <div class="row" style="flex-wrap:nowrap;gap:8px"><input class="input" id="m-link" readonly value="${location.origin}/manage?b=${b.id}" style="font-size:12.5px" /><button class="btn btn-ghost btn-sm" id="m-copy" style="white-space:nowrap">Copy</button></div></div>`:''}
+    <button class="btn btn-primary" id="m-save" style="width:100%;margin-top:14px">Save changes</button>
+    <button class="btn btn-danger" id="s-cancel" style="width:100%;margin-top:12px">Cancel booking</button>
+     </div>
+    </div>`;
+  overlay.classList.add('show');
+  sheet.classList.add('res-wide');
+  $('#x').onclick=closeSheet;
+  enhanceSelects(sheet);
+  if($('#m-copy')) $('#m-copy').onclick=()=>{ const i=$('#m-link'); i.select(); navigator.clipboard&&navigator.clipboard.writeText(i.value); toast('Cancel link copied','ok'); };
+  // Repeat-customer count (how many non-cancelled bookings this person has).
+  (async()=>{
+    const keys=[]; if(b.customer_email)keys.push('customer_email.ilike.'+b.customer_email.trim()); if(b.customer_phone)keys.push('customer_phone.eq.'+b.customer_phone.trim()); if(b.customer_name)keys.push('customer_name.ilike.'+b.customer_name.trim());
+    if(!keys.length) return;
+    const { count } = await sb.from('bookings').select('id',{count:'exact',head:true}).or(keys.join(',')).neq('status','cancelled');
+    const el=document.getElementById('m-rep'); if(el && count>1){ el.textContent='Repeat ('+count+')'; el.classList.remove('hidden'); }
+  })();
+  {
+    if(showHoldBtns){
+      $('#cap-hold').onclick=()=>toast('Demo only — no real funds are captured','ok');
+      $('#cancel-hold').onclick=()=>toast('Demo only — the hold is unchanged','ok');
+      if($('#cap-total')) $('#cap-total').onclick=()=>toast('Demo only — no real funds are captured','ok');
+    }
+    $('#m-tags').querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{
+      const name=ch.dataset.tag; if(selTags.has(name)){ selTags.delete(name); ch.classList.remove('on'); ch.style.cssText=''; }
+      else { selTags.add(name); ch.classList.add('on'); const col=(TAGS.find(t=>t.name===name)||{}).color||'#fff'; ch.style.cssText=`border-color:${col};color:#fff`; }
+    });
+    $('#m-save').onclick=async()=>{
+      const patch={ status_label:$('#m-status').value||null, tags:[...selTags], note:($('#m-note').value||'').trim()||null };
+      $('#m-save').disabled=true;
+      let r=await sb.from('bookings').update(patch).eq('id',id);
+      if(r.error && /note/.test(r.error.message||'')){ delete patch.note; r=await sb.from('bookings').update(patch).eq('id',id); }
+      $('#m-save').disabled=false;
+      if(r.error){ if(!isAuthError(r.error)) toast(r.error.message,'err'); return; }
+      Object.assign(b,patch); closeSheet(); toast('Booking updated','ok'); loadSchedule();
+    };
+  }
+  $('#s-cancel').onclick=async()=>{
+    let r = await sb.from('bookings').update({status:'cancelled', cancelled_at:new Date().toISOString()}).eq('id',id);
+    if(r.error && /cancelled_at/.test(r.error.message||'')) r = await sb.from('bookings').update({status:'cancelled'}).eq('id',id);
+    if(r.error){ toast('Failed: '+r.error.message,'err'); return; }
+    closeSheet(); toast('Removed — slot freed','ok'); loadSchedule();
+  };
+}
+
+/* ---------- Custom date picker (replaces native OS calendar on every date field) ---------- */
+const DP_MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DP_DOW=['Su','Mo','Tu','We','Th','Fr','Sa'];
+const dpPad=n=>String(n).padStart(2,'0');
+const dpParse=iso=>{ if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||'')) return null; const [y,m,d]=iso.split('-').map(Number); return {y,m:m-1,d}; };
+function enhanceDateInputs(){ document.querySelectorAll('input[type="date"]').forEach(buildDatePicker); }
+function buildDatePicker(inp){
+  inp.type='hidden';
+  const wrap=document.createElement('div'); wrap.className='datepick';
+  const trig=document.createElement('button'); trig.type='button'; trig.className='input dp-trigger';
+  const pop=document.createElement('div'); pop.className='dp-pop hidden';
+  inp.parentNode.insertBefore(wrap,inp); wrap.appendChild(inp); wrap.appendChild(trig); wrap.appendChild(pop);
+  let vy, vm;
+  function label(){
+    const v=dpParse(inp.value);
+    if(!v){ trig.textContent='Select date'; trig.classList.add('placeholder'); return; }
+    trig.classList.remove('placeholder');
+    const dt=new Date(v.y,v.m,v.d);
+    trig.textContent=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]+', '+DP_MON[v.m].slice(0,3)+' '+v.d+', '+v.y;
+  }
+  function setVal(iso){ inp.value=iso; label(); inp.dispatchEvent(new Event('change',{bubbles:true})); }
+  function todayLocal(){ const d=new Date(); return {y:d.getFullYear(),m:d.getMonth(),d:d.getDate()}; }
+  function render(){
+    const startDow=new Date(vy,vm,1).getDay(), days=new Date(vy,vm+1,0).getDate();
+    const sel=dpParse(inp.value), t=todayLocal();
+    let cells='';
+    for(let i=0;i<startDow;i++) cells+='<div class="dp-day out"></div>';
+    for(let d=1;d<=days;d++){
+      const iso=`${vy}-${dpPad(vm+1)}-${dpPad(d)}`;
+      const isSel=sel&&sel.y===vy&&sel.m===vm&&sel.d===d;
+      const isToday=t.y===vy&&t.m===vm&&t.d===d;
+      cells+=`<div class="dp-day${isSel?' sel':''}${isToday&&!isSel?' today':''}" data-iso="${iso}">${d}</div>`;
+    }
+    pop.innerHTML=`<div class="dp-head">
+        <button type="button" class="dp-nav" data-nav="-1">‹</button>
+        <div class="dp-title">${DP_MON[vm]} ${vy}</div>
+        <button type="button" class="dp-nav" data-nav="1">›</button>
+      </div>
+      <div class="dp-grid">${DP_DOW.map(d=>`<div class="dp-dow">${d}</div>`).join('')}${cells}</div>
+      <div class="dp-foot"><button type="button" data-today>Today</button><button type="button" data-clear>Clear</button></div>`;
+    pop.querySelectorAll('.dp-nav').forEach(b=>b.onclick=()=>{ vm+=+b.dataset.nav; if(vm<0){vm=11;vy--;} if(vm>11){vm=0;vy++;} render(); });
+    pop.querySelectorAll('.dp-day[data-iso]').forEach(c=>c.onclick=()=>{ setVal(c.dataset.iso); close(); });
+    pop.querySelector('[data-today]').onclick=()=>{ const t=todayLocal(); setVal(`${t.y}-${dpPad(t.m+1)}-${dpPad(t.d)}`); close(); };
+    pop.querySelector('[data-clear]').onclick=()=>{ setVal(''); close(); };
+  }
+  function open(){
+    const v=dpParse(inp.value)||todayLocal(); vy=v.y; vm=v.m; render();
+    pop.classList.remove('hidden');
+    const r=trig.getBoundingClientRect(), up=r.bottom > window.innerHeight*0.60;
+    pop.style.position='fixed'; pop.style.right='auto';
+    pop.style.left=Math.min(r.left, window.innerWidth-266-12)+'px';
+    if(up){ pop.style.top='auto'; pop.style.bottom=(window.innerHeight-r.top+6)+'px'; }
+    else { pop.style.bottom='auto'; pop.style.top=(r.bottom+6)+'px'; }
+  }
+  function close(){ pop.classList.add('hidden'); }
+  trig.onclick=e=>{ e.stopPropagation(); const wasOpen=!pop.classList.contains('hidden'); closeAllPops(); if(!wasOpen) open(); };
+  pop.onclick=e=>e.stopPropagation();
+  inp._dpRefresh=label;
+  label();
+}
+function closeAllPops(){ document.querySelectorAll('.dp-pop,.cs-pop').forEach(p=>p.classList.add('hidden')); }
+document.addEventListener('click',closeAllPops);
+// A fixed-positioned list would visually detach if the sheet behind it scrolled — close on scroll.
+// But scrolling INSIDE the list itself is fine (long hour pickers) — don't close on that.
+document.addEventListener('scroll',(e)=>{ if(e.target instanceof Element && e.target.closest && e.target.closest('.dp-pop,.cs-pop')) return; if(document.querySelector('.dp-pop:not(.hidden),.cs-pop:not(.hidden)')) closeAllPops(); },true);
+// Close the customer autocomplete when clicking outside it.
+document.addEventListener('click',e=>{ const pop=document.getElementById('s-ac'); if(pop && !pop.classList.contains('hidden')){ const wrap=pop.closest('.ac-wrap'); if(wrap && !wrap.contains(e.target)) pop.classList.add('hidden'); } });
+const dpSync=sel=>{ const el=$(sel); if(el&&el._dpRefresh) el._dpRefresh(); };
+
+/* ---------- Custom select (replaces the native OS dropdown everywhere) ---------- */
+function enhanceSelect(sel){
+  if(sel.dataset.csEnh) return; sel.dataset.csEnh='1';
+  sel.style.display='none';
+  const wrap=document.createElement('span'); wrap.className='cs-wrap';
+  const trig=document.createElement('button'); trig.type='button'; trig.className='input cs-trigger';
+  const pop=document.createElement('div'); pop.className='cs-pop hidden';
+  sel.parentNode.insertBefore(wrap,sel); wrap.appendChild(sel); wrap.appendChild(trig); wrap.appendChild(pop);
+  function sync(){ const o=sel.options[sel.selectedIndex]; trig.textContent=o?o.textContent:''; }
+  function build(){
+    pop.innerHTML=[...sel.options].map((o,i)=>`<div class="cs-opt${i===sel.selectedIndex?' on':''}" data-i="${i}">${esc(o.textContent)}</div>`).join('');
+    pop.querySelectorAll('.cs-opt').forEach(el=>el.onclick=ev=>{ ev.stopPropagation(); sel.selectedIndex=+el.dataset.i; sync(); sel.dispatchEvent(new Event('change',{bubbles:true})); pop.classList.add('hidden'); });
+  }
+  // Float the list with fixed positioning so a scrollable sheet can't clip it or grow to fit it.
+  function open(){
+    build(); pop.classList.remove('hidden');
+    const r=trig.getBoundingClientRect(), gap=6, margin=12;
+    const below=window.innerHeight-r.bottom-margin, above=r.top-margin;
+    const up = below<220 && above>below;                 // flip up only when cramped below and roomier above
+    pop.style.position='fixed'; pop.style.left=r.left+'px'; pop.style.width=r.width+'px'; pop.style.right='auto';
+    pop.style.maxHeight=Math.max(160,Math.min(320,(up?above:below)))+'px';   // always fits inside the viewport
+    if(up){ pop.style.top='auto'; pop.style.bottom=(window.innerHeight-r.top+gap)+'px'; }
+    else { pop.style.bottom='auto'; pop.style.top=(r.bottom+gap)+'px'; }
+  }
+  trig.onclick=e=>{ e.stopPropagation(); if(sel.disabled) return; const wasOpen=!pop.classList.contains('hidden'); closeAllPops(); if(!wasOpen) open(); };
+  pop.onclick=e=>e.stopPropagation();
+  sel._csSync=sync; sync();
+}
+function enhanceSelects(root){ (root||document).querySelectorAll('select.input').forEach(enhanceSelect); }
+function syncSelects(root){ (root||document).querySelectorAll('select.input').forEach(s=>s._csSync&&s._csSync()); }
+const csObserver=new MutationObserver(muts=>{ for(const m of muts) for(const n of m.addedNodes){ if(n.nodeType!==1) continue;
+  if(n.matches&&n.matches('select.input')) enhanceSelect(n);
+  if(n.querySelectorAll) n.querySelectorAll('select.input').forEach(enhanceSelect); } });
+
+enhanceDateInputs();
+enhanceSelects();
+(function(){ const wb=document.getElementById('week-bay'), w=wb&&wb.closest('.cs-wrap'); if(w) w.style.display='none'; })();
+csObserver.observe(document.body,{childList:true,subtree:true});
+boot();
+</script>
+</body>
+</html>
