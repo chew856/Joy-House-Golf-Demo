@@ -13,6 +13,7 @@ create table if not exists public.settings (
   max_party  smallint not null default 4,
   slot_step  smallint not null default 30,
   weekly_status jsonb not null default '{}'::jsonb,  -- recurring per-weekday tee-sheet status pattern (see migration 0010)
+  online_status_label text not null default 'Booked',  -- status stamped on self-serve online bookings (see migration 0011)
   updated_at timestamptz not null default now()
 );
 

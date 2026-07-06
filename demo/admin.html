@@ -756,6 +756,10 @@
             <button class="btn btn-ghost btn-sm" id="add-booking-status">+ Add booking status</button>
           </div>
           <div id="booking-statuses-list"></div>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <div><div class="sec-title" style="font-size:14px">Online booking default</div><div class="sub" style="margin:2px 0 0">Status given automatically when a customer books themselves on the site.</div></div>
+            <select class="input" id="online-status" style="max-width:240px;margin-left:auto"></select>
+          </div>
         </div>
       </div>
 
@@ -1421,6 +1425,13 @@ async function loadStatuses(){
     </tr>`; }).join('')}</tbody></table>` : '<div class="empty">No schedule statuses yet.</div>';
   wireStatusRows(sHost);
   enhanceSelects(sHost);
+
+  // Default status stamped on a customer's own online booking (read by the payment webhook).
+  const cur=(SETTINGS&&SETTINGS.online_status_label)||'Booked';
+  const os=$('#online-status');
+  os.innerHTML=`<option value="">— none —</option>`+booking.map(s=>`<option ${cur===s.label?'selected':''}>${esc(s.label)}</option>`).join('');
+  os.onchange=async()=>{ const v=os.value||null; if(await dbUpdate('settings',1,{online_status_label:v})){ SETTINGS.online_status_label=v; toast('Online booking status updated','ok'); } };
+  enhanceSelect(os); os._csSync&&os._csSync();
 }
 $('#add-booking-status').onclick=async()=>{ if(await dbInsert('booking_statuses',{label:'New status',color:'#4ec06a',kind:'booking',sort:STATUSES.length})){ await loadVocab(); loadStatuses(); } };
 $('#add-schedule-status').onclick=async()=>{ if(await dbInsert('booking_statuses',{label:'New status',color:'#4ec06a',kind:'open',sort:STATUSES.length})){ await loadVocab(); loadStatuses(); } };

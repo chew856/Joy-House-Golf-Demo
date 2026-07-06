@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
-import { stripeStatus } from '../lib/booking.js';
-import { insertBooking } from '../lib/db.js';
+import { stripeStatus, normalizeSettings } from '../lib/booking.js';
+import { insertBooking, getSettings } from '../lib/db.js';
 
 function readRaw(req) {
   return new Promise((resolve, reject) => {
@@ -48,13 +48,14 @@ export default async function handler(req, res) {
         }
       } catch (_) { /* best-effort */ }
 
+      const onlineLabel = normalizeSettings(await getSettings()).onlineStatusLabel;   // manager-chosen default
       const { error } = await insertBooking({
         bay_id: md.bayId,
         booking_date: md.dateISO,
         start_min: Number(md.startMin),
         end_min: Number(md.endMin),
         status: 'confirmed',
-        status_label: 'Booked',   // workflow label for a self-booked online reservation
+        status_label: onlineLabel || null,   // workflow label for a self-booked online reservation
         customer_name: name,
         customer_email: email,
         customer_phone: phone,
