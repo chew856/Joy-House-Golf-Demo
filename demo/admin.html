@@ -335,7 +335,21 @@
   .wk-band .input{max-width:160px}
   .wk-band .wk-b-from,.wk-band .wk-b-to{max-width:120px}
   .wk-dash{color:var(--dim)}
-  .ap-dot{width:18px;height:18px;border-radius:5px;border:1px solid var(--border);flex:none;display:inline-block}
+  /* Paint palette above the tee sheet */
+  .paint-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px}
+  .paint-lead{font-family:'Space Grotesk';font-weight:700;font-size:12px;color:var(--muted);margin-right:2px}
+  .paint-sw{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--border);
+    background:var(--near-black);color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:.12s}
+  .paint-sw:hover{border-color:var(--dim);color:#fff}
+  .paint-sw.on{border-color:#fff;color:#fff;box-shadow:0 0 0 1px #fff inset}
+  .paint-dot{width:12px;height:12px;border-radius:4px;flex:none;border:1px solid rgba(255,255,255,.18)}
+  .paint-dot-x{background:repeating-linear-gradient(45deg,#555,#555 2px,#222 2px,#222 4px)}
+  .paint-hint{font-size:11.5px;color:var(--dim);flex-basis:100%;margin-top:2px}
+  /* While painting: crosshair cursor + no text selection + subtle grid highlight */
+  body.painting .bkgrid td.cell[data-min],body.painting .bkgrid th[data-bay],body.painting .bkgrid td.t[data-min]{cursor:crosshair}
+  body.painting .bkgrid th[data-bay],body.painting .bkgrid td.t[data-min]{cursor:cell}
+  body.painting #bk-grid{user-select:none;-webkit-user-select:none}
+  body.painting .bkgrid th[data-bay]:hover,body.painting .bkgrid td.t[data-min]:hover{color:var(--orange)}
 
   /* Slot sheet (add / manage) */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:none;place-items:center;z-index:50;padding:20px}
@@ -462,7 +476,6 @@
             <input class="input" id="bk-date" type="date" />
             <button class="btn btn-ghost btn-sm" id="day-next" title="Next">›</button>
             <button class="btn btn-ghost btn-sm" id="day-today">Today</button>
-            <button class="btn btn-primary btn-sm" id="apply-status">Apply status</button>
           </div>
         </div>
 
@@ -481,11 +494,12 @@
 
         <div class="day-layout" id="day-layout">
           <div class="card" style="margin-bottom:0">
+            <div class="paint-bar" id="paint-bar"></div>
             <div class="legend2">
               <span><i class="sw avail"></i> Open (shows $/hr)</span>
               <span><i class="sw booked"></i> Booked</span>
               <span><i class="sw" style="background:rgba(255,91,91,.16);border-color:#ff5b5b"></i> Closed / status</span>
-              <span class="hint">Set the usual week in Schedule Templates · use “Apply status” for a one-off day · tap a slot to add · drag a booking to move it</span>
+              <span class="hint">Set the usual week in Schedule Templates · pick a colour above and drag on the sheet for a one-off day · tap a slot to add · drag a booking to move it</span>
             </div>
             <div class="grid-scroll"><div id="bk-grid"></div></div>
           </div>
@@ -1782,12 +1796,12 @@ const ovForDate = iso => OVERRIDES.filter(o=>ovOn(o,iso));
 // Venue-wide override (all bays, whole day / special hours) for a date, or null.
 // A closure always wins over special hours; otherwise the latest one applies — matching the server.
 const venueOverride = iso => { const vs=ovForDate(iso).filter(o=>o.start_min==null && (!o.bay_ids||!o.bay_ids.length)); return vs.find(o=>o.is_closed) || vs[vs.length-1] || null; };
-// Block override covering a specific bay + minute (time-range blocks and bay-only closures).
-// An "Open" status override (status_open) colours the sheet but never blocks — it's skipped here.
+// Block override covering a specific bay + minute — only MANUAL blocks/closures from the
+// Schedule Overrides tab (they carry no status colour). Painted statuses are handled separately.
 function findOvBlock(bayId, iso, m){
   if(((SETTINGS.bays||[]).find(x=>x.id===bayId)||{}).holding) return null;   // holding bay is never blocked
   return ovForDate(iso).find(o=>{
-    if(o.status_open) return false;
+    if(o.status_open || o.status_color) return false;   // painted statuses aren't manual blocks
     const bays=(o.bay_ids&&o.bay_ids.length)?o.bay_ids:null;
     if(bays && !bays.includes(bayId)) return false;
     if(o.start_min!=null){
@@ -1800,9 +1814,10 @@ function findOvBlock(bayId, iso, m){
 }
 
 // ---- Tee-sheet status painting ----
-// Every open slot shows its $/hr; a painted status (weekly pattern or a one-off override)
-// tints the cell with its colour. "Open" statuses stay bookable + priced; "Closed" ones go
-// red with no price and can't be booked. Precedence: date override > weekly pattern > default Open.
+// Every open slot shows its $/hr; a painted status tints the cell. "Open" statuses stay bookable +
+// priced; "Closed" ones take their colour with no price and can't be booked. A painted status is a
+// single-day schedule_override carrying status_color (+ status_open). Precedence per cell:
+//   booking > manual block > painted status > weekly pattern > default Open.
 const STATUS_GREEN='#4ec06a', STATUS_RED='#ff5b5b';
 function norm6(h){ h=(h||'').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); if(!/^[0-9a-fA-F]{6}$/.test(h)) h='4ec06a'; return '#'+h; }
 function readableOn(hex){ const h=norm6(hex).slice(1); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return (0.2126*r+0.7152*g+0.0722*b) < 96 ? '#d8d8d8' : norm6(hex); }
@@ -1821,53 +1836,161 @@ function weeklyStatusAt(weekday, bayId, m){
   return hit ? { label:hit.label||'', color:hit.color||null, open:hit.open!==false, full:!!hit.full } : null;
 }
 
-// Date-specific "Open" status override covering a cell (paints colour, stays bookable).
-function findOvStatusOpen(bayId, iso, m){
+// A painted status override covering a cell → { open, color, label } or null (saved overrides).
+function findOvStatus(bayId, iso, m){
   if(((SETTINGS.bays||[]).find(x=>x.id===bayId)||{}).holding) return null;
-  return ovForDate(iso).find(o=>{
-    if(!o.status_open) return false;
+  const o=ovForDate(iso).find(o=>{
+    if(!o.status_color) return false;
     const bays=(o.bay_ids&&o.bay_ids.length)?o.bay_ids:null;
     if(bays && !bays.includes(bayId)) return false;
     if(o.start_min==null) return true;
     const s=iso===o.override_date?o.start_min:0, e=iso===(o.end_date||o.override_date)?o.end_min:1440;
     return m>=s && m<e;
-  }) || null;
+  });
+  return o ? { open:!!o.status_open, color:o.status_color, label:o.note||'' } : null;
+}
+
+// Painted status for a cell: the live day-paint overlay on the shown day, else the saved override.
+let DAYPAINT={};   // { "bayId:startMin": {open,color,label} } — the shown day only, mutated while painting
+function paintAt(bayId, iso, m){
+  if(VIEW==='day' && iso===$('#bk-date').value) return DAYPAINT[bayId+':'+m] || null;
+  return findOvStatus(bayId, iso, m);
 }
 
 // Effective status for an empty (non-booked, non-blocked) cell.
-// Returns { kind:'open'|'closed', color, label, price } — price (# / hr) only when open.
 function cellStatus(bayId, iso, m){
   const holding=((SETTINGS.bays||[]).find(x=>x.id===bayId)||{}).holding;
-  const wd=dowOf(iso), price = holding ? null : (rateForBay(bayId, wd, Math.floor(m/60))||0);
-  const op=findOvStatusOpen(bayId, iso, m);
-  if(op) return { kind:'open', color:op.status_color||STATUS_GREEN, label:op.note||'', price };
-  const wk = holding ? null : weeklyStatusAt(wd, bayId, m);
+  if(holding) return { kind:'open', color:null, label:'', price:null, holding:true };
+  const wd=dowOf(iso), price = rateForBay(bayId, wd, Math.floor(m/60))||0;
+  const p=paintAt(bayId, iso, m);
+  if(p) return p.open ? { kind:'open', color:p.color||STATUS_GREEN, label:p.label, price }
+                      : { kind:'closed', color:p.color||STATUS_RED, label:p.label||'Closed', price:null };
+  const wk=weeklyStatusAt(wd, bayId, m);
   if(wk) return wk.open ? { kind:'open', color:wk.color||STATUS_GREEN, label:wk.full?'':wk.label, price }
                         : { kind:'closed', color:wk.color||STATUS_RED, label:wk.label||'Closed', price:null };
-  return { kind:'open', color: holding?null:STATUS_GREEN, label:'', price };   // default Open
+  return { kind:'open', color:STATUS_GREEN, label:'', price };   // default Open
 }
 
-// The <td> for a non-booked cell: a closed block/status, or an open+priced slot. iso is the cell's date.
+// The <td> for a non-booked cell. Open + Closed status cells carry data-bay/data-min so they're paintable.
 function openCellTD(b, iso, m){
-  const hc=b.holding?' holdcell':'';
   const dd=iso?` data-date="${iso}"`:'';
-  const blk=findOvBlock(b.id, iso, m);
-  if(blk){
-    const col=blk.status_color?norm6(blk.status_color):null;
-    const sty=col?` style="background:${col}1f;border-color:${col}66;color:${readableOn(col)}"`:'';
-    return `<td class="cell ovr" data-ovid="${blk.id}"${sty}><span class="nm">${esc(blk.note||'Closed')}</span></td>`;
-  }
+  const blk=findOvBlock(b.id, iso, m);   // manual block/closure — not paintable, managed in the Overrides tab
+  if(blk) return `<td class="cell ovr" data-ovid="${blk.id}"><span class="nm">${esc(blk.note||'Closed')}</span></td>`;
   const st=cellStatus(b.id, iso, m);
+  if(st.holding) return `<td class="cell open holdcell" data-bay="${b.id}" data-min="${m}"${dd}>+</td>`;
   if(st.kind==='closed'){
     const col=norm6(st.color);
-    return `<td class="cell shut${hc}" style="background:${col}1f;border-color:${col}66;color:${readableOn(col)}"><span class="nm">${esc(st.label||'Closed')}</span></td>`;
+    return `<td class="cell shut" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}1f;border-color:${col}66;color:${readableOn(col)}"><span class="nm">${esc(st.label||'Closed')}</span></td>`;
   }
-  if(b.holding) return `<td class="cell open holdcell" data-bay="${b.id}" data-min="${m}"${dd}>+</td>`;
   const col=norm6(st.color||STATUS_GREEN);
   const priceHtml = st.price!=null ? `<span class="price">$${st.price}</span><span class="per">/hr</span>` : '+';
   const lbl = st.label ? `<span class="slbl">${esc(st.label)}</span>` : '';
   return `<td class="cell open sprice" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}12;border-color:${col}3a;color:${readableOn(col)}">${priceHtml}${lbl}</td>`;
 }
+
+// ---- Paint palette + drag interaction ----
+let ACTIVE_BRUSH=null;   // null | 'erase' | { open, color, label }
+let STROKING=false;
+function statusFieldsBrush(s){ return { open:s.kind!=='closed', color:s.color, label:s.label }; }
+function buildDayPaint(){
+  DAYPAINT={};
+  if(VIEW!=='day') return;
+  const iso=$('#bk-date').value; if(!iso) return;
+  const [open,close]=hoursForDate(iso); if(!(close>open)) return;
+  const step=SETTINGS.slot_step||30;
+  realBays().forEach(b=>{ for(let m=open*60;m<close*60;m+=step){ const p=findOvStatus(b.id, iso, m); if(p) DAYPAINT[b.id+':'+m]=p; } });
+}
+function renderPalette(){
+  const bar=$('#paint-bar'); if(!bar) return;
+  if(VIEW!=='day'){ bar.style.display='none'; document.body.classList.remove('painting'); return; }
+  bar.style.display='';
+  const ss=scheduleStatuses();
+  if(!ss.length){ bar.innerHTML='<span class="paint-lead dim">Add a schedule status to start painting — see the Statuses tab.</span>'; return; }
+  bar.innerHTML = `<span class="paint-lead">Paint:</span>`
+    + ss.map((s,i)=>`<button class="paint-sw" data-i="${i}" title="${esc(s.label)}"><span class="paint-dot" style="background:${norm6(s.color)}"></span>${esc(s.label)}</button>`).join('')
+    + `<button class="paint-sw paint-erase" data-erase="1"><span class="paint-dot paint-dot-x"></span>Erase</button>`
+    + `<button class="btn btn-ghost btn-sm paint-done" style="display:none;margin-left:2px">Done</button>`
+    + `<span class="paint-hint" style="display:none">Drag across the sheet · click a bay name or a time to fill it · “Done” when finished</span>`;
+  bar.querySelectorAll('.paint-sw[data-i]').forEach(btn=>btn.onclick=()=>setBrush(statusFieldsBrush(ss[+btn.dataset.i]), btn));
+  bar.querySelector('.paint-erase').onclick=e=>setBrush('erase', e.currentTarget);
+  bar.querySelector('.paint-done').onclick=()=>setBrush(null);
+  if(ACTIVE_BRUSH){   // restore highlight after a re-render (loadSchedule rebuilds the bar)
+    let btn=null;
+    if(ACTIVE_BRUSH==='erase') btn=bar.querySelector('.paint-erase');
+    else { const i=ss.findIndex(s=>s.label===ACTIVE_BRUSH.label && (s.color||'')===(ACTIVE_BRUSH.color||'')); if(i>=0) btn=bar.querySelector('.paint-sw[data-i="'+i+'"]'); }
+    if(btn) btn.classList.add('on');
+    document.body.classList.add('painting');
+    bar.querySelector('.paint-done').style.display=''; bar.querySelector('.paint-hint').style.display='';
+  }
+}
+function setBrush(b, btn){
+  ACTIVE_BRUSH=b; const bar=$('#paint-bar'); if(!bar) return;
+  bar.querySelectorAll('.paint-sw').forEach(x=>x.classList.remove('on'));
+  if(b && btn) btn.classList.add('on');
+  document.body.classList.toggle('painting', !!b);
+  const done=bar.querySelector('.paint-done'), hint=bar.querySelector('.paint-hint');
+  if(done) done.style.display=b?'':'none';
+  if(hint) hint.style.display=b?'':'none';
+}
+function brushBand(){ return ACTIVE_BRUSH==='erase' ? null : { open:ACTIVE_BRUSH.open, color:ACTIVE_BRUSH.color, label:ACTIVE_BRUSH.label }; }
+function paintKey(bay,m){ if(ACTIVE_BRUSH==='erase') delete DAYPAINT[bay+':'+m]; else DAYPAINT[bay+':'+m]=brushBand(); }
+function paintable(bay,iso,m){
+  const bObj=(SETTINGS.bays||[]).find(x=>x.id===bay); if(!bObj||bObj.holding) return false;
+  return !findBooking(bay,iso,m) && !findOvBlock(bay,iso,m);
+}
+function paintTdFrom(el){ const td=el&&el.closest&&el.closest('td.cell'); return (td && td.dataset && td.dataset.min!=null && $('#bk-grid').contains(td)) ? td : null; }
+function paintCellNode(td){
+  const bay=td.dataset.bay, m=+td.dataset.min, iso=$('#bk-date').value;
+  if(!bay || isNaN(m) || !paintable(bay,iso,m)) return;
+  paintKey(bay,m);
+  const bObj=(SETTINGS.bays||[]).find(x=>x.id===bay)||{id:bay};
+  const tmp=document.createElement('tbody'); tmp.innerHTML='<tr>'+openCellTD(bObj, iso, m)+'</tr>';
+  td.replaceWith(tmp.querySelector('td'));
+}
+function paintColumn(bay){
+  const iso=$('#bk-date').value, [open,close]=hoursForDate(iso); if(!(close>open)) return;
+  const step=SETTINGS.slot_step||30;
+  for(let m=open*60;m<close*60;m+=step) if(paintable(bay,iso,m)) paintKey(bay,m);
+  renderGrid(); persistDayPaint();
+}
+function paintRow(m){
+  const iso=$('#bk-date').value;
+  realBays().forEach(b=>{ if(paintable(b.id,iso,m)) paintKey(b.id,m); });
+  renderGrid(); persistDayPaint();
+}
+const sameBand=(a,b)=> a.open===b.open && (a.color||'')===(b.color||'') && (a.label||'')===(b.label||'');
+async function persistDayPaint(){
+  const iso=$('#bk-date').value, step=SETTINGS.slot_step||30;
+  const byBay={};
+  Object.keys(DAYPAINT).forEach(k=>{ const idx=k.lastIndexOf(':'); const bay=k.slice(0,idx), mm=+k.slice(idx+1); (byBay[bay] ||= []).push({m:mm,b:DAYPAINT[k]}); });
+  const rows=[];
+  Object.entries(byBay).forEach(([bay,arr])=>{
+    arr.sort((a,c)=>a.m-c.m);
+    let i=0;
+    while(i<arr.length){
+      let j=i; while(j+1<arr.length && arr[j+1].m===arr[j].m+step && sameBand(arr[j+1].b,arr[i].b)) j++;
+      const b=arr[i].b;
+      rows.push({ override_date:iso, end_date:null, note:b.label||null, is_active:true, bay_ids:[bay],
+        status_open:!!b.open, status_color:b.color||null, is_closed:false, open_hour:null, close_hour:null,
+        start_min:arr[i].m, end_min:arr[j].m+step });
+      i=j+1;
+    }
+  });
+  const del=await sb.from('schedule_overrides').delete().eq('override_date',iso).is('end_date',null).not('status_color','is',null);
+  if(del.error){ if(!isAuthError(del.error)) toast(/status_color|status_open|column/i.test(del.error.message)?'Run database migration 0009 (supabase/migrations) first.':del.error.message,'err'); return; }
+  if(rows.length){ const ins=await sb.from('schedule_overrides').insert(rows); if(ins.error){ if(!isAuthError(ins.error)) toast(ins.error.message,'err'); return; } }
+  await loadSchedule();
+}
+// Delegated paint handlers (attached once; the grid's innerHTML is replaced on each render).
+$('#bk-grid').addEventListener('pointerdown', e=>{
+  if(!ACTIVE_BRUSH) return;
+  const th=e.target.closest('th[data-bay]'); if(th){ e.preventDefault(); paintColumn(th.dataset.bay); return; }
+  const tt=e.target.closest('td.t[data-min]'); if(tt){ e.preventDefault(); paintRow(+tt.dataset.min); return; }
+  const td=paintTdFrom(e.target); if(!td) return;
+  e.preventDefault(); STROKING=true; paintCellNode(td);
+});
+document.addEventListener('pointermove', e=>{ if(!STROKING||!ACTIVE_BRUSH) return; const td=paintTdFrom(document.elementFromPoint(e.clientX,e.clientY)); if(td) paintCellNode(td); });
+document.addEventListener('pointerup', ()=>{ if(!STROKING) return; STROKING=false; persistDayPaint(); });
 
 // effective open/close for a specific date, honouring venue-wide overrides
 function hoursForDate(iso){
@@ -1884,6 +2007,7 @@ function shiftDay(n){ const step=VIEW==='week'?7:1; const d=new Date($('#bk-date
 
 $('#view-toggle').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{
   VIEW=btn.dataset.v;
+  if(VIEW==='week') setBrush(null);   // painting is a day-view action
   $('#view-toggle').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
   $('#day-layout').classList.toggle('week', VIEW==='week');
   const wbWrap = $('#week-bay').closest('.cs-wrap') || $('#week-bay');
@@ -1907,13 +2031,13 @@ async function loadSchedule(){
     await loadOverridesFor(wk);
     const { data, error } = await sb.from('bookings').select('*').gte('booking_date',wk[0]).lte('booking_date',wk[6]).neq('status','cancelled');
     if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
-    BK=data||[]; renderOverrideBanner(null); updateStats(); $('#day-list-card').style.display='none'; renderWeek(wk);
+    BK=data||[]; renderOverrideBanner(null); updateStats(); $('#day-list-card').style.display='none'; renderPalette(); renderWeek(wk);
   } else {
     $('#day-label').textContent = dateLabel(date);
     await loadOverridesFor([date]);
     const { data, error } = await sb.from('bookings').select('*').eq('booking_date',date).neq('status','cancelled').order('start_min');
     if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
-    BK=data||[]; renderOverrideBanner(date); updateStats(); $('#day-list-card').style.display=''; renderGrid(); renderDayList();
+    BK=data||[]; renderOverrideBanner(date); updateStats(); $('#day-list-card').style.display=''; buildDayPaint(); renderPalette(); renderGrid(); renderDayList();
   }
 }
 
@@ -1953,10 +2077,10 @@ function renderGrid(){
   const step=SETTINGS.slot_step||30;
   if(!(close>open)){ $('#bk-grid').innerHTML='<div class="closed-note">Closed on this day'+(venueOverride(date)?' (schedule override)':' — set hours in Schedule Templates')+'.</div>'; return; }
   let h='<table class="bkgrid"><thead><tr><th class="t"></th>';
-  SETTINGS.bays.forEach(b=> h+=`<th class="${b.holding?'hold-col':''}" title="${esc(b.description||'')}">${esc(b.name)}<small>${b.holding?'':esc(b.sim||'')}</small></th>`);
+  SETTINGS.bays.forEach(b=> h+=`<th class="${b.holding?'hold-col':''}"${b.holding?'':` data-bay="${b.id}"`} title="${esc(b.description||'')}">${esc(b.name)}<small>${b.holding?'':esc(b.sim||'')}</small></th>`);
   h+='</tr></thead><tbody>';
   for(let m=open*60; m<close*60; m+=step){
-    h+=`<tr><td class="t">${fmtMin(m)}</td>`;
+    h+=`<tr><td class="t" data-min="${m}">${fmtMin(m)}</td>`;
     SETTINGS.bays.forEach(b=>{
       const hc=b.holding?' holdcell':'';
       const bk=findBooking(b.id,date,m);
@@ -1973,9 +2097,9 @@ function renderGrid(){
     h+='</tr>';
   }
   $('#bk-grid').innerHTML=h+'</tbody></table>';
-  $('#bk-grid').querySelectorAll('.cell.open').forEach(c=>c.onclick=()=>openAdd(c.dataset.bay,+c.dataset.min,date));
-  $('#bk-grid').querySelectorAll('.cell[data-bid]').forEach(c=>c.onclick=()=>openManage(c.dataset.bid));
-  $('#bk-grid').querySelectorAll('.cell.ovr').forEach(c=>c.onclick=()=>openOverrideSheet(c.dataset.ovid));
+  $('#bk-grid').querySelectorAll('.cell.open').forEach(c=>c.onclick=()=>{ if(ACTIVE_BRUSH) return; openAdd(c.dataset.bay,+c.dataset.min,date); });
+  $('#bk-grid').querySelectorAll('.cell[data-bid]').forEach(c=>c.onclick=()=>{ if(ACTIVE_BRUSH) return; openManage(c.dataset.bid); });
+  $('#bk-grid').querySelectorAll('.cell.ovr').forEach(c=>c.onclick=()=>{ if(ACTIVE_BRUSH) return; openOverrideSheet(c.dataset.ovid); });
   wireGridDnD();
 }
 
@@ -1984,7 +2108,7 @@ function wireGridDnD(){
   const grid=$('#bk-grid'); let dragId=null;
   grid.querySelectorAll('.cell[data-bid]').forEach(c=>{
     c.setAttribute('draggable','true');
-    c.addEventListener('dragstart',e=>{ dragId=c.dataset.bid; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',dragId);
+    c.addEventListener('dragstart',e=>{ if(ACTIVE_BRUSH){ e.preventDefault(); return; } dragId=c.dataset.bid; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',dragId);
       grid.querySelectorAll('.cell[data-bid="'+dragId+'"]').forEach(x=>x.classList.add('drag-src')); });
     c.addEventListener('dragend',()=>{ grid.querySelectorAll('.drag-src,.drop-ok').forEach(x=>x.classList.remove('drag-src','drop-ok')); dragId=null; });
   });
@@ -2167,86 +2291,6 @@ function openOverrideSheet(id){
   $('#ovs-off').onclick=async()=>{ if(await dbUpdate('schedule_overrides',o.id,{is_active:false})){ closeSheet(); toast('Override disabled — slots reopened','ok'); loadSchedule(); } };
   $('#ovs-del').onclick=async()=>{ if(await dbDelete('schedule_overrides',o.id)){ closeSheet(); toast('Override removed','ok'); loadSchedule(); } };
 }
-
-// One-click "paint a status" over the tee sheet — all bays or some, whole day or a time range,
-// a single day or a date range. Writes one schedule_override that sits on top of the weekly base.
-let AP_BAYS=new Set(['']);   // '' = all bays
-function apRenderBays(){
-  const all=AP_BAYS.has('');
-  const host=sheet.querySelector('#ap-bays'); if(!host) return;
-  host.innerHTML=`<span class="bp ${all?'on':''}" data-b="">All bays</span>`+
-    realBays().map(b=>`<span class="bp ${AP_BAYS.has(b.id)?'on':''}" data-b="${b.id}">${esc(b.name)}</span>`).join('');
-  host.querySelectorAll('.bp').forEach(el=>el.onclick=()=>{
-    const id=el.dataset.b;
-    if(id===''){ AP_BAYS=new Set(['']); }
-    else { AP_BAYS.delete(''); if(AP_BAYS.has(id)) AP_BAYS.delete(id); else AP_BAYS.add(id); if(!AP_BAYS.size) AP_BAYS=new Set(['']); }
-    apRenderBays();
-  });
-}
-function openApplyStatus(){
-  const ss=scheduleStatuses();
-  if(!ss.length){ toast('Add a schedule status first — see the Statuses tab.','err'); return; }
-  AP_BAYS=new Set(['']);
-  const date=$('#bk-date').value||todayISO();
-  let cover='day';   // 'day' | 'range'
-  sheet.innerHTML=`
-    <button class="sheet-close" id="x">✕</button>
-    <h3>Apply a status</h3>
-    <div class="sub">Paint a status across the tee sheet. It sits on top of the weekly pattern for the day(s) you choose.</div>
-    <div class="field" style="margin-top:16px"><label>Status</label>
-      <div class="row" style="gap:10px;align-items:center">
-        <span class="ap-dot" id="ap-dot"></span>
-        <select class="input" id="ap-status" style="flex:1">${ss.map(s=>`<option value="${s.id}" data-color="${esc(s.color||'')}" data-open="${s.kind!=='closed'?1:0}">${esc(s.label)} ${s.kind==='closed'?'· closed':'· open'}</option>`).join('')}</select>
-      </div>
-    </div>
-    <div class="field"><label>Bays</label><div class="bay-pick" id="ap-bays"></div></div>
-    <div class="field"><label>Time</label>
-      <div class="seg seg-sm" id="ap-cover" style="margin-bottom:10px">
-        <button data-c="day" class="on" type="button">Whole day</button>
-        <button data-c="range" type="button">Time range</button>
-      </div>
-      <div class="grid2" id="ap-time" style="display:none">
-        <div class="field" style="margin:0"><label>From</label><select class="input" id="ap-from">${minOptions(11*60)}</select></div>
-        <div class="field" style="margin:0"><label>To</label><select class="input" id="ap-to">${minOptions(13*60)}</select></div>
-      </div>
-    </div>
-    <div class="grid2">
-      <div class="field" style="margin:0"><label>Start date</label><input class="input" id="ap-date" type="date" value="${date}" /></div>
-      <div class="field" style="margin:0"><label>End date (optional)</label><input class="input" id="ap-end" type="date" /></div>
-    </div>
-    <button class="btn btn-primary" id="ap-apply" style="width:100%;margin-top:8px">Apply status</button>`;
-  overlay.classList.add('show');
-  $('#x').onclick=closeSheet;
-  apRenderBays();
-  enhanceSelects(sheet);
-  dpSync('#ap-date'); dpSync('#ap-end');
-  const dot=sheet.querySelector('#ap-dot'), stSel=sheet.querySelector('#ap-status');
-  const syncDot=()=>{ const o=stSel.options[stSel.selectedIndex]; dot.style.background=norm6(o?o.dataset.color:''); };
-  stSel.addEventListener('change',syncDot); syncDot();
-  sheet.querySelector('#ap-cover').querySelectorAll('button').forEach(btn=>btn.onclick=()=>{
-    cover=btn.dataset.c; sheet.querySelector('#ap-cover').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
-    sheet.querySelector('#ap-time').style.display = cover==='range'?'grid':'none';
-  });
-  $('#ap-apply').onclick=async()=>{
-    const o=stSel.options[stSel.selectedIndex];
-    const label=(o.textContent||'').replace(/ · (closed|open)$/,'').trim();
-    const open=o.dataset.open==='1', color=o.dataset.color||null;
-    const sd=$('#ap-date').value; if(!sd){ toast('Pick a start date','err'); return; }
-    const ed=$('#ap-end').value||null; if(ed && ed<sd){ toast('End date is before the start date','err'); return; }
-    let start=0, end=24*60;
-    if(cover==='range'){ start=+$('#ap-from').value; end=+$('#ap-to').value; if(!(end>start)){ toast('End time must be after the start time','err'); return; } }
-    const row={ override_date:sd, end_date:ed, note:label, is_active:true,
-      bay_ids: AP_BAYS.has('')?[]:[...AP_BAYS],
-      status_open:open, status_color:color,
-      is_closed:false, open_hour:null, close_hour:null, start_min:start, end_min:end };
-    $('#ap-apply').disabled=true;
-    const { error } = await sb.from('schedule_overrides').insert(row);
-    $('#ap-apply').disabled=false;
-    if(error){ if(!isAuthError(error)) toast(/status_open|status_color|column/i.test(error.message)?'Run database migration 0009 (supabase/migrations) first.':error.message,'err'); return; }
-    closeSheet(); toast(`“${label}” applied${ed?' across the date range':''}`,'ok'); loadSchedule();
-  };
-}
-$('#apply-status').onclick=openApplyStatus;
 
 function openAdd(bayId,startMin,dateISO){
   const ends=endChoices(bayId,startMin,dateISO);
