@@ -2522,7 +2522,8 @@ function openManage(id){
   const b=BK.find(x=>x.id===id); if(!b) return;
   const isBlock=b.status==='blocked';
   const conf=(b.id||'').replace(/-/g,'').slice(0,8).toUpperCase();
-  const statusOpts=`<option value="">— none —</option>`+STATUSES.map(s=>`<option ${b.status_label===s.label?'selected':''}>${esc(s.label)}</option>`).join('');
+  // A reservation carries a booking/workflow status (Booked, Held, Checked In…), not a schedule status.
+  const statusOpts=`<option value="">— none —</option>`+STATUSES.filter(s=>!isScheduleStatus(s)).map(s=>`<option ${b.status_label===s.label?'selected':''}>${esc(s.label)}</option>`).join('');
   const selTags=new Set(b.tags||[]);
   const pay=(SETTINGS.pay)||{}; const taxPct=pay.taxPct||0; const cur=pay.currency||'CAD';
   const fmt=c=>cur+' $'+((c||0)/100).toFixed(2);
@@ -2703,26 +2704,36 @@ function buildDatePicker(inp){
     pop.querySelector('[data-today]').onclick=()=>{ const t=todayLocal(); setVal(`${t.y}-${dpPad(t.m+1)}-${dpPad(t.d)}`); close(); };
     pop.querySelector('[data-clear]').onclick=()=>{ setVal(''); close(); };
   }
-  function open(){
-    const v=dpParse(inp.value)||todayLocal(); vy=v.y; vm=v.m; render();
-    pop.classList.remove('hidden');
+  function place(){
     const r=trig.getBoundingClientRect(), up=r.bottom > window.innerHeight*0.60;
     pop.style.position='fixed'; pop.style.right='auto';
     pop.style.left=Math.min(r.left, window.innerWidth-266-12)+'px';
     if(up){ pop.style.top='auto'; pop.style.bottom=(window.innerHeight-r.top+6)+'px'; }
     else { pop.style.bottom='auto'; pop.style.top=(r.bottom+6)+'px'; }
   }
-  function close(){ pop.classList.add('hidden'); }
+  function open(){
+    const v=dpParse(inp.value)||todayLocal(); vy=v.y; vm=v.m; render();
+    pop.classList.remove('hidden'); place(); OPEN_POP={pop,trig,place};
+  }
+  function close(){ pop.classList.add('hidden'); if(OPEN_POP&&OPEN_POP.pop===pop) OPEN_POP=null; }
   trig.onclick=e=>{ e.stopPropagation(); const wasOpen=!pop.classList.contains('hidden'); closeAllPops(); if(!wasOpen) open(); };
   pop.onclick=e=>e.stopPropagation();
   inp._dpRefresh=label;
   label();
 }
-function closeAllPops(){ document.querySelectorAll('.dp-pop,.cs-pop').forEach(p=>p.classList.add('hidden')); }
+let OPEN_POP=null;   // the currently open fixed-position pop + its reposition fn { pop, trig, place }
+function closeAllPops(){ document.querySelectorAll('.dp-pop,.cs-pop').forEach(p=>p.classList.add('hidden')); OPEN_POP=null; }
 document.addEventListener('click',closeAllPops);
-// A fixed-positioned list would visually detach if the sheet behind it scrolled — close on scroll.
-// But scrolling INSIDE the list itself is fine (long hour pickers) — don't close on that.
-document.addEventListener('scroll',(e)=>{ if(e.target instanceof Element && e.target.closest && e.target.closest('.dp-pop,.cs-pop')) return; if(document.querySelector('.dp-pop:not(.hidden),.cs-pop:not(.hidden)')) closeAllPops(); },true);
+// A fixed-positioned list would visually detach if the sheet behind it scrolled. Instead of closing,
+// reposition it to follow its field as the sheet scrolls — only close if the field scrolls off-screen.
+// (Scrolling INSIDE the list itself is fine — e.g. a long status/hour picker — so ignore that.)
+document.addEventListener('scroll',(e)=>{
+  if(e.target instanceof Element && e.target.closest && e.target.closest('.dp-pop,.cs-pop')) return;
+  if(!OPEN_POP) return;
+  const r=OPEN_POP.trig.getBoundingClientRect();
+  if(r.bottom<4 || r.top>window.innerHeight-4) closeAllPops();   // field scrolled out of view
+  else OPEN_POP.place();                                          // otherwise keep it pinned to the field
+},true);
 // Close the customer autocomplete when clicking outside it.
 document.addEventListener('click',e=>{ const pop=document.getElementById('s-ac'); if(pop && !pop.classList.contains('hidden')){ const wrap=pop.closest('.ac-wrap'); if(wrap && !wrap.contains(e.target)) pop.classList.add('hidden'); } });
 const dpSync=sel=>{ const el=$(sel); if(el&&el._dpRefresh) el._dpRefresh(); };
@@ -2741,8 +2752,7 @@ function enhanceSelect(sel){
     pop.querySelectorAll('.cs-opt').forEach(el=>el.onclick=ev=>{ ev.stopPropagation(); sel.selectedIndex=+el.dataset.i; sync(); sel.dispatchEvent(new Event('change',{bubbles:true})); pop.classList.add('hidden'); });
   }
   // Float the list with fixed positioning so a scrollable sheet can't clip it or grow to fit it.
-  function open(){
-    build(); pop.classList.remove('hidden');
+  function place(){
     const r=trig.getBoundingClientRect(), gap=6, margin=12;
     const below=window.innerHeight-r.bottom-margin, above=r.top-margin;
     const up = below<220 && above>below;                 // flip up only when cramped below and roomier above
@@ -2751,6 +2761,7 @@ function enhanceSelect(sel){
     if(up){ pop.style.top='auto'; pop.style.bottom=(window.innerHeight-r.top+gap)+'px'; }
     else { pop.style.bottom='auto'; pop.style.top=(r.bottom+gap)+'px'; }
   }
+  function open(){ build(); pop.classList.remove('hidden'); place(); OPEN_POP={pop,trig,place}; }
   trig.onclick=e=>{ e.stopPropagation(); if(sel.disabled) return; const wasOpen=!pop.classList.contains('hidden'); closeAllPops(); if(!wasOpen) open(); };
   pop.onclick=e=>e.stopPropagation();
   sel._csSync=sync; sync();
