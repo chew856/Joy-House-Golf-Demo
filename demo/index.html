@@ -156,6 +156,11 @@
   .cell.booked .price { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
   .cell.booked .per { display: none; }
   .cell.booked.shut { color: var(--muted); background: repeating-linear-gradient(45deg,#1a1a1a,#1a1a1a 6px,#111 6px,#111 12px); border-color: var(--border); border-style: solid; }
+  .cell.booked.held { color: #e8c876; background: rgba(214,180,90,.10); border-color: rgba(214,180,90,.5); }
+  .hold-timer { display:flex; align-items:center; justify-content:center; gap:7px; margin-bottom:14px; padding:9px 12px; border-radius:10px; background:rgba(214,180,90,.12); border:1px solid rgba(214,180,90,.4); color:#e8c876; font-size:13px; font-weight:600; letter-spacing:.01em; }
+  .hold-timer.warn { background:rgba(229,57,53,.14); border-color:rgba(229,57,53,.5); color:#f0897f; }
+  .toast { position:fixed; left:50%; bottom:26px; transform:translateX(-50%) translateY(12px); background:#1b1b1b; border:1px solid rgba(255,255,255,.14); color:#fff; padding:11px 18px; border-radius:10px; font-size:14px; z-index:200; opacity:0; pointer-events:none; transition:.2s; max-width:90vw; text-align:center; box-shadow:0 8px 30px rgba(0,0,0,.5); }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .cell.buffer { color: var(--dim); cursor: not-allowed; border-color: var(--border);
     background: repeating-linear-gradient(45deg,#161616,#161616 6px,#0e0e0e 6px,#0e0e0e 12px); }
   .cell.buffer .price { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
@@ -418,6 +423,7 @@
 
     <!-- Real Stripe (Payment Element, dark theme) — used when the server is running with keys -->
     <div id="stripe-mode" style="display:none">
+      <div class="hold-timer" id="hold-timer" style="display:none"></div>
       <div class="pay-cols">
         <div>
           <input class="input" id="sc-name" placeholder="Full name" />
@@ -497,6 +503,7 @@ const CONFIG = {
 let DB = false;
 let bookedRanges = {};   // { bayId: [[startMin,endMin], …] } for the selected date
 let closedRanges = {};   // { bayId: [[startMin,endMin], …] } closed by the recurring weekly status pattern
+let heldRanges = {};     // { bayId: [[startMin,endMin], …] } another customer has in their cart right now
 let dateHoursOverride = null;  // [open,close] from a schedule override for state.date, or null
 
 function applySettings(s){
@@ -574,6 +581,12 @@ function isSlotClosed(bayId, m){
   return ranges.some(([s,e]) => m < e && (m + CONFIG.slotStep) > s);
 }
 
+// A slot another customer currently has in their cart (a live hold) — temporarily unavailable.
+function isSlotHeld(bayId, m){
+  const ranges = heldRanges[bayId] || [];
+  return ranges.some(([s,e]) => m < e && (m + CONFIG.slotStep) > s);
+}
+
 // first booked half-hour at or after `from`, else the day's close
 function firstBlock(date, bayId, from){
   const [, close] = dayHours(date);
@@ -612,7 +625,7 @@ async function loadAvailability(){
     const r = await fetch('/api/availability?date='+isoDate(state.date));
     if(!r.ok) return;
     const d = await r.json();
-    if(d.dbEnabled){ applySettings(d.settings); bookedRanges = d.booked || {}; closedRanges = d.closed || {}; dateHoursOverride = d.dateHours || null; }
+    if(d.dbEnabled){ applySettings(d.settings); bookedRanges = d.booked || {}; closedRanges = d.closed || {}; heldRanges = d.held || {}; dateHoursOverride = d.dateHours || null; }
   }catch(e){}
 }
 
@@ -656,7 +669,7 @@ function buildCalendar(){
     if(isPast) el.classList.add('past');
     if(isToday) el.classList.add('today');
     if(isSel) el.classList.add('sel');
-    if(!isPast) el.onclick=async ()=>{ state.date=date; clearSelection(); bookedRanges={}; closedRanges={}; dateHoursOverride=null; renderAll(); scrollToTimes(); await loadAvailability(); renderAll(); };
+    if(!isPast) el.onclick=async ()=>{ state.date=date; clearSelection(); bookedRanges={}; closedRanges={}; heldRanges={}; dateHoursOverride=null; renderAll(); scrollToTimes(); await loadAvailability(); renderAll(); };
     grid.appendChild(el);
   }
 }
@@ -714,7 +727,9 @@ function buildGrid(){
             + `<span class="price">$${rate}</span><span class="per">/hr</span></td>`;
       } else if(realBooked){
         const shut = isSlotClosed(b.id, m);
-        bodyRows+=`<td class="cell booked${shut?' shut':''}"><span class="price">${shut?'Closed':'Booked'}</span></td>`;
+        const held = !shut && isSlotHeld(b.id, m);
+        const label = shut ? 'Closed' : held ? 'Held' : 'Booked';
+        bodyRows+=`<td class="cell booked${shut?' shut':held?' held':''}"><span class="price">${label}</span></td>`;
       } else {
         // free, but not enough room for a full session (next booking/close is under the minimum) —
         // let the customer phone the shop to grab the short slot.
@@ -880,18 +895,55 @@ const bookingKey = () => [isoDate(state.date), state.bay, state.startMin, state.
 
 async function createPI(){
   const key=bookingKey();
-  const body={ dateISO:isoDate(state.date), bayId:state.bay, startMin:state.startMin, endMin:state.endMin, party:state.party };
+  // hold:true locks the slot for ~5 min while the customer checks out (Ticketmaster-style cart hold).
+  const body={ dateISO:isoDate(state.date), bayId:state.bay, startMin:state.startMin, endMin:state.endMin, party:state.party, hold:true };
   const r=await fetch('/api/create-payment-intent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await r.json();
+  if(r.status===409){ const e=new Error(data.error||'That time was just taken — pick another slot.'); e.taken=true; throw e; }
   if(!r.ok) throw new Error(data.error||'error');
   piCache={ key, clientSecret:data.clientSecret, amount:data.amount };
+  if(data.expiresAt) startHoldTimer(data.expiresAt);
   return piCache;
 }
-function prefetchPI(){
-  if(!stripeReady || !selectionValid()) return;
-  if(piCache && piCache.key===bookingKey()) return;
-  clearTimeout(prefetchTimer);
-  prefetchTimer=setTimeout(()=>{ createPI().catch(()=>{}); }, 300);
+// Holds are created only when the customer actually opens checkout — never on hover/selection —
+// so browsing the grid doesn't lock slots.
+function prefetchPI(){}
+
+/* ---------- Cart hold timer ---------- */
+let holdTimer=null, holdExpiresAt=0, holdActive=false;
+function startHoldTimer(expiresAt){
+  holdActive=true;
+  holdExpiresAt=new Date(expiresAt).getTime();
+  const el=$('#hold-timer'); if(el) el.style.display='flex';
+  if(holdTimer) clearInterval(holdTimer);
+  tickHold();
+  holdTimer=setInterval(tickHold, 1000);
+}
+function tickHold(){
+  const el=$('#hold-timer'); if(!el) return;
+  const left=Math.max(0, Math.round((holdExpiresAt-Date.now())/1000));
+  const mm=Math.floor(left/60), ss=left%60;
+  el.textContent='Your slot is held for '+mm+':'+String(ss).padStart(2,'0');
+  el.classList.toggle('warn', left<=60);
+  if(left<=0) onHoldExpired();
+}
+function stopHoldTimer(){ if(holdTimer){ clearInterval(holdTimer); holdTimer=null; } const el=$('#hold-timer'); if(el) el.style.display='none'; }
+function releaseCurrentHold(){
+  if(!holdActive || !selectionValid()) return;
+  holdActive=false;
+  const body=JSON.stringify({ dateISO:isoDate(state.date), bayId:state.bay, startMin:state.startMin, endMin:state.endMin });
+  try{ fetch('/api/release-hold',{method:'POST',headers:{'Content-Type':'application/json'},body,keepalive:true}); }catch(e){}
+}
+async function onHoldExpired(){
+  holdActive=false; stopHoldTimer(); piCache=null; elements=null;
+  $('#pay-overlay').classList.remove('show'); setStep(2);
+  await loadAvailability(); renderAll();
+  toast('Your hold expired and the slot was released — please pick a time again.');
+}
+function toast(msg){
+  let t=$('#toast'); if(!t){ t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'), 3800);
 }
 
 async function mountStripe(){
@@ -901,7 +953,10 @@ async function mountStripe(){
   let data;
   try{
     data=(piCache && piCache.key===bookingKey()) ? piCache : await createPI();
-  }catch(err){ peEl.innerHTML='<div class="loading">Could not start checkout: '+err.message+'</div>'; return; }
+  }catch(err){
+    if(err.taken){ stopHoldTimer(); $('#pay-overlay').classList.remove('show'); setStep(2); await loadAvailability(); renderAll(); toast(err.message); return; }
+    peEl.innerHTML='<div class="loading">Could not start checkout: '+err.message+'</div>'; return;
+  }
   $('#sc-amt').textContent=money(data.amount/100);
   elements=STRIPE.elements({ clientSecret:data.clientSecret, appearance:STRIPE_APPEARANCE });
   peEl.innerHTML='';
@@ -931,14 +986,19 @@ async function openPayment(){
 }
 
 function closePayment(){
+  releaseCurrentHold();   // give the slot back if they backed out before paying
+  stopHoldTimer();
+  piCache=null;
   elements=null;
   $('#pay-overlay').classList.remove('show');
   setStep(2);
+  loadAvailability().then(renderAll);   // reflect the released slot
 }
 $('#pay-cancel').onclick=closePayment;
 $('#pay-close').onclick=closePayment;
 $('#pay-overlay').addEventListener('click', e=>{ if(e.target===$('#pay-overlay')) closePayment(); });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape' && $('#pay-overlay').classList.contains('show')) closePayment(); });
+window.addEventListener('pagehide', releaseCurrentHold);   // free the slot if they close the tab mid-checkout (TTL is the backstop)
 
 /* Simulated fallback Pay button */
 // Basic "is this real" checks so bookings carry a usable email + phone.
@@ -998,6 +1058,7 @@ async function handleReturn(){
 }
 
 function showStripeConfirmation(pi){
+  holdActive=false; stopHoldTimer();   // hold is now a confirmed booking (flipped by the webhook)
   const code='JH-'+Math.abs([...pi.id].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7)).toString(36).slice(0,6).toUpperCase();
   piCache=null;
   $('#conf-code').textContent=code;
@@ -1011,6 +1072,7 @@ function showStripeConfirmation(pi){
 }
 
 function showConfirmation(name){
+  holdActive=false; stopHoldTimer();
   const bay=CONFIG.bays.find(b=>b.id===state.bay);
   const price=priceRange(state.date, state.startMin, state.endMin);
   const dateStr=state.date.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});

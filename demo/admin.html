@@ -281,6 +281,8 @@
   .cell.shut .nm{display:block;font-weight:700;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cell.bk{background:rgba(78,192,106,.12);border-color:rgba(78,192,106,.45);color:#9fe0b0}
   .cell.bl{background:rgba(240,82,61,.10);border-color:rgba(240,82,61,.45);border-style:dashed;color:#e0796f}
+  .cell.held{background:rgba(214,180,90,.10);border-color:rgba(214,180,90,.45);border-style:dashed;color:#e8c876;cursor:default}
+  .cell.held .bnote{color:#b79a52;font-style:normal}
   .cell .nm{display:block;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .cell .cont{opacity:.5}
   .cell .cmeta{display:flex;gap:4px;justify-content:center;align-items:center;flex-wrap:nowrap;overflow:hidden;margin-top:4px;max-width:100%}
@@ -2173,13 +2175,13 @@ async function loadSchedule(){
     await loadOverridesFor(wk);
     const { data, error } = await sb.from('bookings').select('*').gte('booking_date',wk[0]).lte('booking_date',wk[6]).neq('status','cancelled');
     if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
-    BK=data||[]; renderOverrideBanner(null); updateStats(); $('#day-list-card').style.display='none'; renderPalette(); renderWeek(wk);
+    BK=liveBookings(data); renderOverrideBanner(null); updateStats(); $('#day-list-card').style.display='none'; renderPalette(); renderWeek(wk);
   } else {
     $('#day-label').textContent = dateLabel(date);
     await loadOverridesFor([date]);
     const { data, error } = await sb.from('bookings').select('*').eq('booking_date',date).neq('status','cancelled').order('start_min');
     if(error){ if(!isAuthError(error)) toast('Load failed: '+error.message,'err'); return; }
-    BK=data||[]; renderOverrideBanner(date); updateStats(); $('#day-list-card').style.display=''; buildDayPaint(); renderPalette(); renderGrid(); renderDayList();
+    BK=liveBookings(data); renderOverrideBanner(date); updateStats(); $('#day-list-card').style.display=''; buildDayPaint(); renderPalette(); renderGrid(); renderDayList();
   }
 }
 
@@ -2190,12 +2192,14 @@ function renderOverrideBanner(date){
 }
 
 function updateStats(){
-  const booked=BK.filter(b=>b.status!=='blocked').length, blocked=BK.filter(b=>b.status==='blocked').length;
+  const booked=BK.filter(b=>b.status!=='blocked'&&b.status!=='held').length, blocked=BK.filter(b=>b.status==='blocked').length;
   const rev=BK.reduce((s,b)=>s+(b.source==='online'?(b.amount_cents||0):0),0);
   $('#stat-booked').textContent=booked; $('#stat-blocked').textContent=blocked;
   $('#stat-rev').textContent='$'+(rev/100).toFixed(rev%100?2:0);
 }
 
+// Drop stale cart holds (abandoned checkouts); keep real bookings/blocks + live holds.
+function liveBookings(data){ const now=new Date().toISOString(); return (data||[]).filter(b => b.status!=='held' || (b.expires_at && b.expires_at>now)); }
 const findBooking = (bayId,iso,m) => BK.find(b => b.bay_id===bayId && b.booking_date===iso && m>=b.start_min && m<b.end_min);
 const statusColor = label => (STATUSES.find(s=>s.label===label)||{}).color || '#4ec06a';
 const tagColor = name => (TAGS.find(t=>t.name===name)||{}).color || '#B5B5B5';
@@ -2229,8 +2233,12 @@ function renderGrid(){
       if(bk){
         const visStart=Math.max(bk.start_min, open*60);    // clamp to the day's effective open (special-hours override)
         if(m!==visStart) return;                            // covered by the rowspan from its first visible row
-        const cls=bk.status==='blocked'?'bl':'bk';
         const span=Math.max(1, Math.round((Math.min(bk.end_min, close*60)-visStart)/step));
+        if(bk.status==='held'){   // a customer is mid-checkout — locked, not a real booking yet
+          h+=`<td class="cell held${hc}" rowspan="${span}"><span class="nm">Held</span><span class="bnote">customer checking out</span></td>`;
+          return;
+        }
+        const cls=bk.status==='blocked'?'bl':'bk';
         h+=`<td class="cell ${cls}${hc}" rowspan="${span}" data-bid="${bk.id}" data-bay="${b.id}" data-min="${visStart}"><span class="nm">${bk.status==='blocked'?'Blocked':esc(bk.customer_name||'Booked')}</span>${cellMeta(bk)}</td>`;
         return;
       }
@@ -2333,8 +2341,9 @@ function renderWeek(days){
       if(bk){
         const visStart=Math.max(bk.start_min, o*60);       // clamp to this day's effective open
         if(m!==visStart) return;                            // covered by the rowspan from its first visible row
-        const cls=bk.status==='blocked'?'bl':'bk';
         const span=Math.max(1, Math.round((Math.min(bk.end_min, c*60)-visStart)/step));
+        if(bk.status==='held'){ h+=`<td class="cell held" rowspan="${span}"><span class="nm">Held</span></td>`; return; }
+        const cls=bk.status==='blocked'?'bl':'bk';
         h+=`<td class="cell ${cls}" rowspan="${span}" data-bid="${bk.id}" data-bay="${bay}" data-min="${visStart}" data-date="${iso}"><span class="nm">${bk.status==='blocked'?'Block':esc(bk.customer_name||'Booked')}</span>${cellMeta(bk)}</td>`;
         return;
       }
@@ -2350,7 +2359,7 @@ function renderWeek(days){
 }
 
 function renderDayList(){
-  const items=[...BK].sort((a,b)=>a.start_min-b.start_min);
+  const items=BK.filter(b=>b.status!=='held').sort((a,b)=>a.start_min-b.start_min);
   if(!items.length){ $('#day-list').innerHTML='<div class="empty">Nothing booked yet.</div>'; return; }
   $('#day-list').innerHTML=items.map(b=>{
     const bl=b.status==='blocked';

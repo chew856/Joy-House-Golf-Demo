@@ -25,13 +25,14 @@ create table if not exists public.bookings (
   start_min              smallint not null,   -- minutes from midnight
   end_min                smallint not null,
   status                 text     not null default 'confirmed'
-                           check (status in ('confirmed','blocked','cancelled')),
+                           check (status in ('confirmed','blocked','cancelled','held')),
   customer_name          text,
   customer_email         text,
   customer_phone         text,
   amount_cents           integer,
   stripe_payment_intent  text,
   source                 text     not null default 'online',  -- online | manager
+  expires_at             timestamptz,   -- set on 'held' cart rows; null for real bookings (see migration 0012)
   created_at             timestamptz not null default now()
 );
 create index if not exists bookings_date_bay on public.bookings (booking_date, bay_id);

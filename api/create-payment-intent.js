@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { priceForBooking, summaryFor, stripeStatus, normalizeSettings, bayName, overrideEffects, overrideConflicts, weeklyStatusConflicts } from '../lib/booking.js';
-import { getSettings, getBookingsForDate, getOverridesForDate } from '../lib/db.js';
+import { getSettings, getBookingsForDate, getOverridesForDate, createHold } from '../lib/db.js';
 
 // Creates a PaymentIntent for a booking. Price + availability are validated server-side.
 export default async function handler(req, res) {
@@ -11,7 +11,7 @@ export default async function handler(req, res) {
 
   try {
     const stripe = new Stripe(secretKey);
-    const { dateISO, bayId, startMin, endMin, party } = req.body || {};
+    const { dateISO, bayId, startMin, endMin, party, hold } = req.body || {};
 
     const settings = normalizeSettings(await getSettings());
     const overrides = await getOverridesForDate(dateISO);
@@ -21,14 +21,24 @@ export default async function handler(req, res) {
     const amount = priceForBooking({ settings, dateISO, bayId, startMin, endMin, dateHours: fx.dateHours });
     const players = Math.min(Math.max(parseInt(party, 10) || 1, 1), settings.maxParty);
 
-    // Reject if the slot was already taken (defense in depth; the DB constraint is the final guard).
+    // Reject if the slot is really taken (confirmed booking / manager block). Cart holds are handled
+    // by createHold below — its atomic insert is the real guard, so they don't count here.
     const conflict = (await getBookingsForDate(dateISO))
-      .some((b) => b.bay_id === bayId && Number(startMin) < b.end_min && Number(endMin) > b.start_min);
+      .some((b) => b.status !== 'held' && b.bay_id === bayId && Number(startMin) < b.end_min && Number(endMin) > b.start_min);
     if (conflict) return res.status(409).json({ error: 'That time was just booked — pick another slot.' });
 
     if (overrideConflicts(fx, settings, dateISO, bayId, Number(startMin), Number(endMin)) ||
         weeklyStatusConflicts(settings, overrides, dateISO, bayId, Number(startMin), Number(endMin))) {
       return res.status(409).json({ error: 'That time is unavailable — pick another slot.' });
+    }
+
+    // Cart hold: lock the slot for ~5 min while the customer checks out (see lib/db.js createHold).
+    let expiresAt = null;
+    if (hold) {
+      const h = await createHold({ dateISO, bayId, startMin: Number(startMin), endMin: Number(endMin) });
+      if (h.conflict) return res.status(409).json({ error: 'That time was just taken — pick another slot.' });
+      if (h.error) return res.status(500).json({ error: h.error });
+      expiresAt = h.expiresAt;
     }
 
     const pi = await stripe.paymentIntents.create({
@@ -47,7 +57,7 @@ export default async function handler(req, res) {
       },
     });
 
-    res.status(200).json({ clientSecret: pi.client_secret, amount });
+    res.status(200).json({ clientSecret: pi.client_secret, amount, expiresAt });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }

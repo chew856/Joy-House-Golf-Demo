@@ -1,6 +1,6 @@
 import Stripe from 'stripe';
 import { stripeStatus, normalizeSettings } from '../lib/booking.js';
-import { insertBooking, getSettings } from '../lib/db.js';
+import { insertBooking, getSettings, confirmHold } from '../lib/db.js';
 
 function readRaw(req) {
   return new Promise((resolve, reject) => {
@@ -49,12 +49,8 @@ export default async function handler(req, res) {
       } catch (_) { /* best-effort */ }
 
       const onlineLabel = normalizeSettings(await getSettings()).onlineStatusLabel;   // manager-chosen default
-      const { error } = await insertBooking({
-        bay_id: md.bayId,
-        booking_date: md.dateISO,
-        start_min: Number(md.startMin),
-        end_min: Number(md.endMin),
-        status: 'confirmed',
+      const slot = { dateISO: md.dateISO, bayId: md.bayId, startMin: Number(md.startMin), endMin: Number(md.endMin) };
+      const patch = {
         status_label: onlineLabel || null,   // workflow label for a self-booked online reservation
         customer_name: name,
         customer_email: email,
@@ -62,9 +58,16 @@ export default async function handler(req, res) {
         amount_cents: pi.amount,
         stripe_payment_intent: pi.id,
         source: 'online',
-      });
+      };
+      // Prefer flipping the customer's live cart hold → confirmed; fall back to a fresh insert if it lapsed.
+      const flip = await confirmHold({ ...slot, patch });
+      let error = flip.error || null;
+      if (!flip.updated) {
+        const ins = await insertBooking({ bay_id: slot.bayId, booking_date: slot.dateISO, start_min: slot.startMin, end_min: slot.endMin, status: 'confirmed', ...patch });
+        error = ins.error;
+      }
       console.log(error
-        ? `⚠ Booking insert failed (${md.summary}): ${error}`
+        ? `⚠ Booking save failed (${md.summary}): ${error}`
         : `✅ Booking PAID & saved — ${md.bayName} · ${md.summary}`);
     }
   }

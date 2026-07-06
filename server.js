@@ -7,7 +7,8 @@ import {
   priceForBooking, summaryFor, stripeStatus, normalizeSettings, bayName, fmtMin, hoursUntilBooking,
   overrideEffects, overrideConflicts, weeklyStatusBlocked, weeklyStatusConflicts,
 } from './lib/booking.js';
-import { getSettings, getBookingsForDate, getOverridesForDate, insertBooking, dbEnabled, admin } from './lib/db.js';
+import { getSettings, getBookingsForDate, getOverridesForDate, insertBooking, dbEnabled, admin,
+  createHold, releaseHold, confirmHold, cleanupExpiredHolds } from './lib/db.js';
 
 // Local dev server. On Vercel the same logic runs as serverless functions in /api.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -53,12 +54,17 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
         }
       } catch (_) {}
       const onlineLabel = normalizeSettings(await getSettings()).onlineStatusLabel;
-      const { error } = await insertBooking({
-        bay_id: md.bayId, booking_date: md.dateISO, start_min: Number(md.startMin), end_min: Number(md.endMin),
-        status: 'confirmed', status_label: onlineLabel || null, customer_name: name, customer_email: email, customer_phone: phone,
-        amount_cents: pi.amount, stripe_payment_intent: pi.id, source: 'online',
-      });
-      console.log(error ? `⚠ Booking insert failed: ${error}` : `✅ Booking PAID & saved — ${md.summary}`);
+      const slot = { dateISO: md.dateISO, bayId: md.bayId, startMin: Number(md.startMin), endMin: Number(md.endMin) };
+      const patch = { status_label: onlineLabel || null, customer_name: name, customer_email: email, customer_phone: phone,
+        amount_cents: pi.amount, stripe_payment_intent: pi.id, source: 'online' };
+      // Prefer flipping the customer's live cart hold → confirmed; fall back to a fresh insert if it lapsed.
+      const flip = await confirmHold({ ...slot, patch });
+      let error = flip.error || null;
+      if (!flip.updated) {
+        const ins = await insertBooking({ bay_id: slot.bayId, booking_date: slot.dateISO, start_min: slot.startMin, end_min: slot.endMin, status: 'confirmed', ...patch });
+        error = ins.error;
+      }
+      console.log(error ? `⚠ Booking save failed: ${error}` : `✅ Booking PAID & saved — ${md.summary}`);
     }
   }
   res.json({ received: true });
@@ -125,9 +131,14 @@ app.get('/api/availability', async (req, res) => {
   const dateISO = req.query.date || '';
   const booked = {};
   const closed = {};
+  const held = {};      // live cart holds — shown to other users as "Held"
   let dateHours = null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
-    for (const b of await getBookingsForDate(dateISO)) (booked[b.bay_id] ||= []).push([b.start_min, b.end_min]);
+    await cleanupExpiredHolds();
+    for (const b of await getBookingsForDate(dateISO)) {
+      (booked[b.bay_id] ||= []).push([b.start_min, b.end_min]);
+      if (b.status === 'held') (held[b.bay_id] ||= []).push([b.start_min, b.end_min]);
+    }
     const overrides = await getOverridesForDate(dateISO);
     const fx = overrideEffects(overrides, settings, dateISO);
     dateHours = fx.dateHours;
@@ -145,24 +156,32 @@ app.get('/api/availability', async (req, res) => {
     dateHours,
     booked,
     closed,
+    held,
   });
 });
 
 app.post('/api/create-payment-intent', async (req, res) => {
   if (!stripeEnabled) return res.status(503).json({ error: 'Stripe not configured' });
   try {
-    const { dateISO, bayId, startMin, endMin, party } = req.body;
+    const { dateISO, bayId, startMin, endMin, party, hold } = req.body;
     const settings = normalizeSettings(await getSettings());
     const overrides = await getOverridesForDate(dateISO);
     const fx = overrideEffects(overrides, settings, dateISO);
     const amount = priceForBooking({ settings, dateISO, bayId, startMin, endMin, dateHours: fx.dateHours });
     const players = Math.min(Math.max(parseInt(party, 10) || 1, 1), settings.maxParty);
     const conflict = (await getBookingsForDate(dateISO))
-      .some((b) => b.bay_id === bayId && Number(startMin) < b.end_min && Number(endMin) > b.start_min);
+      .some((b) => b.status !== 'held' && b.bay_id === bayId && Number(startMin) < b.end_min && Number(endMin) > b.start_min);
     if (conflict) return res.status(409).json({ error: 'That time was just booked — pick another slot.' });
     if (overrideConflicts(fx, settings, dateISO, bayId, Number(startMin), Number(endMin)) ||
         weeklyStatusConflicts(settings, overrides, dateISO, bayId, Number(startMin), Number(endMin))) {
       return res.status(409).json({ error: 'That time is unavailable — pick another slot.' });
+    }
+    let expiresAt = null;
+    if (hold) {
+      const h = await createHold({ dateISO, bayId, startMin: Number(startMin), endMin: Number(endMin) });
+      if (h.conflict) return res.status(409).json({ error: 'That time was just taken — pick another slot.' });
+      if (h.error) return res.status(500).json({ error: h.error });
+      expiresAt = h.expiresAt;
     }
     const pi = await stripe.paymentIntents.create({
       amount, currency: settings.currency,
@@ -173,11 +192,18 @@ app.post('/api/create-payment-intent', async (req, res) => {
         players: String(players), summary: summaryFor({ dateISO, startMin, endMin, players }),
       },
     });
-    res.json({ clientSecret: pi.client_secret, amount });
+    res.json({ clientSecret: pi.client_secret, amount, expiresAt });
   } catch (err) {
     console.error('create-payment-intent:', err.message);
     res.status(400).json({ error: err.message });
   }
+});
+
+// Release a cart hold (checkout closed/abandoned before payment). Best-effort — the 5-min TTL is the backstop.
+app.post('/api/release-hold', async (req, res) => {
+  const { dateISO, bayId, startMin, endMin } = req.body || {};
+  if (dateISO && bayId) await releaseHold({ dateISO, bayId, startMin: Number(startMin), endMin: Number(endMin) });
+  res.json({ ok: true });
 });
 
 app.listen(PORT, () => {
