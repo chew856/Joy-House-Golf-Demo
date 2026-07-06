@@ -2449,6 +2449,7 @@ function openAdd(bayId,startMin,dateISO){
         <div class="ac-pop hidden" id="s-ac"></div>
       </div>
       <div class="field"><label>Phone / email</label><input class="input" id="s-contact" placeholder="Optional" autocomplete="off" /></div>
+      <div class="field"><label>Status</label><select class="input" id="s-status"><option value="">— none —</option>${STATUSES.filter(s=>!isScheduleStatus(s)).map(s=>`<option>${esc(s.label)}</option>`).join('')}</select></div>
     </div>
     <div class="field"><label>Note</label><textarea class="input" id="s-note" rows="2" placeholder="Optional"></textarea></div>
     <button class="btn btn-primary" id="s-add" style="width:100%;margin-top:4px">Add to schedule</button>`;
@@ -2492,6 +2493,7 @@ function openAdd(bayId,startMin,dateISO){
       customer_name: type==='blocked'?null:(($('#s-name')?.value||'').trim()||null),
       customer_phone: contact.includes('@')?null:(contact||null),
       customer_email: contact.includes('@')?contact:null,
+      status_label: type==='blocked'?null:(($('#s-status')?.value||'').trim()||null),
       note: ($('#s-note')?.value||'').trim()||null };
     $('#s-add').disabled=true;
     let r=await sb.from('bookings').insert(row);
