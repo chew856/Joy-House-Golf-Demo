@@ -54,7 +54,7 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
       } catch (_) {}
       const { error } = await insertBooking({
         bay_id: md.bayId, booking_date: md.dateISO, start_min: Number(md.startMin), end_min: Number(md.endMin),
-        status: 'confirmed', customer_name: name, customer_email: email, customer_phone: phone,
+        status: 'confirmed', status_label: 'Booked', customer_name: name, customer_email: email, customer_phone: phone,
         amount_cents: pi.amount, stripe_payment_intent: pi.id, source: 'online',
       });
       console.log(error ? `⚠ Booking insert failed: ${error}` : `✅ Booking PAID & saved — ${md.summary}`);

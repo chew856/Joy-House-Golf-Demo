@@ -54,6 +54,7 @@ export default async function handler(req, res) {
         start_min: Number(md.startMin),
         end_min: Number(md.endMin),
         status: 'confirmed',
+        status_label: 'Booked',   // workflow label for a self-booked online reservation
         customer_name: name,
         customer_email: email,
         customer_phone: phone,
