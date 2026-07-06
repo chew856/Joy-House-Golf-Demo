@@ -1825,7 +1825,7 @@ function findOvBlock(bayId, iso, m){
 //   booking > manual block > painted status > weekly pattern > default Open.
 const STATUS_GREEN='#4ec06a', STATUS_RED='#ff5b5b';
 function norm6(h){ h=(h||'').replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); if(!/^[0-9a-fA-F]{6}$/.test(h)) h='4ec06a'; return '#'+h; }
-function readableOn(hex){ const h=norm6(hex).slice(1); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return (0.2126*r+0.7152*g+0.0722*b) < 96 ? '#d8d8d8' : norm6(hex); }
+function readableOn(hex){ const h=norm6(hex).slice(1); const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16); return (0.2126*r+0.7152*g+0.0722*b) < 130 ? '#e2e2e2' : norm6(hex); }
 
 // Weekly-pattern status for a bay at a minute (client mirror of lib/booking.js weeklyStatusAt).
 function weeklyStatusAt(weekday, bayId, m){
@@ -1868,12 +1868,12 @@ function cellStatus(bayId, iso, m){
   if(holding) return { kind:'open', color:null, label:'', price:null, holding:true };
   const wd=dowOf(iso), price = rateForBay(bayId, wd, Math.floor(m/60))||0;
   const p=paintAt(bayId, iso, m);
-  if(p) return p.open ? { kind:'open', color:p.color||STATUS_GREEN, label:p.label, price }
-                      : { kind:'closed', color:p.color||STATUS_RED, label:p.label||'Closed', price:null };
+  if(p) return p.open ? { kind:'open', color:p.color||STATUS_GREEN, label:p.label, price, painted:true }
+                      : { kind:'closed', color:p.color||STATUS_RED, label:p.label||'Closed', price:null, painted:true };
   const wk=weeklyStatusAt(wd, bayId, m);
-  if(wk) return wk.open ? { kind:'open', color:wk.color||STATUS_GREEN, label:wk.full?'':wk.label, price }
-                        : { kind:'closed', color:wk.color||STATUS_RED, label:wk.label||'Closed', price:null };
-  return { kind:'open', color:STATUS_GREEN, label:'', price };   // default Open
+  if(wk) return wk.open ? { kind:'open', color:wk.color||STATUS_GREEN, label:wk.full?'':wk.label, price, painted:!wk.full }
+                        : { kind:'closed', color:wk.color||STATUS_RED, label:wk.label||'Closed', price:null, painted:true };
+  return { kind:'open', color:STATUS_GREEN, label:'', price, painted:false };   // default Open
 }
 
 // The <td> for a non-booked cell. Open + Closed status cells carry data-bay/data-min so they're paintable.
@@ -1883,14 +1883,18 @@ function openCellTD(b, iso, m){
   if(blk) return `<td class="cell ovr" data-ovid="${blk.id}"><span class="nm">${esc(blk.note||'Closed')}</span></td>`;
   const st=cellStatus(b.id, iso, m);
   if(st.holding) return `<td class="cell open holdcell" data-bay="${b.id}" data-min="${m}"${dd}>+</td>`;
-  if(st.kind==='closed'){
-    const col=norm6(st.color);
-    return `<td class="cell shut" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}1f;border-color:${col}66;color:${readableOn(col)}"><span class="nm">${esc(st.label||'Closed')}</span></td>`;
-  }
   const col=norm6(st.color||STATUS_GREEN);
+  // Closed + painted statuses wear their exact colour (full-strength border, like the palette swatch);
+  // an unpainted "Open" slot stays a quiet green so painted statuses stand out against it.
+  if(st.kind==='closed'){
+    return `<td class="cell shut" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}2b;border-color:${col};color:${readableOn(col)}"><span class="nm">${esc(st.label||'Closed')}</span></td>`;
+  }
   const priceHtml = st.price!=null ? `<span class="price">$${st.price}</span><span class="per">/hr</span>` : '+';
-  const lbl = st.label ? `<span class="slbl">${esc(st.label)}</span>` : '';
-  return `<td class="cell open sprice" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}12;border-color:${col}3a;color:${readableOn(col)}">${priceHtml}${lbl}</td>`;
+  if(st.painted){
+    const lbl = st.label ? `<span class="slbl">${esc(st.label)}</span>` : '';
+    return `<td class="cell open sprice painted" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}22;border-color:${col};color:${readableOn(col)}">${priceHtml}${lbl}</td>`;
+  }
+  return `<td class="cell open sprice" data-bay="${b.id}" data-min="${m}"${dd} style="--sc:${col};background:${col}10;border-color:${col}30;color:${readableOn(col)}">${priceHtml}</td>`;
 }
 
 // ---- Paint palette + drag interaction ----
