@@ -354,6 +354,18 @@
   body.painting .cell.open.sprice:hover{box-shadow:none}   /* only the selection ring highlights while painting */
   /* Live rectangle preview while dragging */
   .bkgrid td.cell.sel-paint{box-shadow:0 0 0 2px var(--brush,#fff) inset!important;border-color:var(--brush,#fff)!important}
+  /* Weekly status paint grid (7 weekday columns × time rows) */
+  .wkgrid{width:100%;min-width:660px;border-collapse:separate;border-spacing:5px}
+  .wkgrid th{font-family:'Space Grotesk';font-weight:700;font-size:12px;color:#fff;padding:2px 4px 8px;text-align:center;cursor:cell}
+  .wkgrid th.t{width:56px;cursor:default}
+  .wkgrid td.t{font-family:'Space Grotesk';font-weight:700;font-size:11.5px;color:var(--muted);text-align:right;padding-right:8px;white-space:nowrap;width:56px;cursor:cell}
+  .wkc{border:1px solid var(--border);border-radius:8px;height:30px;text-align:center;vertical-align:middle;overflow:hidden}
+  .wkc[data-min]{cursor:crosshair}
+  .wkc.off{background:transparent!important;border:1px dashed var(--border)!important;opacity:.2}
+  .wkc .wl{display:block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;opacity:.9}
+  .wkc.wsel{box-shadow:0 0 0 2px var(--wbrush,#fff) inset!important;border-color:var(--wbrush,#fff)!important}
+  body.painting-w #weekly-grid{user-select:none;-webkit-user-select:none}
+  body.painting-w .wkgrid th[data-wd]:hover,body.painting-w .wkgrid td.t[data-min]:hover{color:var(--orange)}
 
   /* Slot sheet (add / manage) */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);backdrop-filter:blur(3px);display:none;place-items:center;z-index:50;padding:20px}
@@ -707,7 +719,7 @@
         <div class="card">
           <div class="row" style="justify-content:space-between;align-items:flex-start;gap:12px">
             <div><h3 class="card-h" style="margin-bottom:2px">Weekly tee-sheet status</h3>
-              <div class="sub">The status painted across all bays each weekday, applied automatically every day. Leave it on <b>Open</b> for a normal day; add time bands to vary within a day (e.g. Happy Hour). <b>Auto-fill from prices</b> places Open + Open (Prime Rate) from your rate hours. For a one-off day, use <b>Paint status</b> on the tee sheet.</div></div>
+              <div class="sub">Paint the usual week here — it applies to every day automatically (all bays). <b>Auto-fill from prices</b> places Open + Open (Prime Rate) from your rate hours; then Save. For a one-off day that differs, use <b>Paint status</b> on the tee sheet.</div></div>
             <div class="row" style="gap:8px;flex:none">
               <button class="btn btn-ghost btn-sm" id="weekly-autofill">Auto-fill from prices</button>
               <button class="btn btn-primary btn-sm" id="save-weekly-status">Save weekly status</button>
@@ -1199,55 +1211,97 @@ $('#save-hours').onclick = async () => {
   toast('Weekly hours saved — live on the booking site','ok');
 };
 
-/* ----- Weekly tee-sheet status pattern ----- */
+/* ----- Weekly tee-sheet status pattern (visual paint grid: 7 weekday columns × time rows) ----- */
 function scheduleStatuses(){ return STATUSES.filter(isScheduleStatus); }
 function statusFields(s){ return { statusId:s.id, label:s.label, color:s.color, open:s.kind!=='closed' }; }
-function statusOptEls(sel){ return scheduleStatuses().map(s=>`<option value="${s.id}" ${String(s.id)===String(sel)?'selected':''}>${esc(s.label)}</option>`).join(''); }
-function defaultOpenStatusId(){ const ss=scheduleStatuses(); const o=ss.find(s=>s.kind==='open'&&/^open$/i.test((s.label||'').trim()))||ss.find(s=>s.kind==='open'); return o?o.id:(ss[0]?ss[0].id:''); }
-function bandRowHTML(b){
-  const s=(b&&b.start!=null)?b.start:17*60, e=(b&&b.end!=null)?b.end:19*60;
-  return `<div class="wk-band">
-    <select class="input wk-b-status">${statusOptEls(b&&b.statusId)}</select>
-    <select class="input wk-b-from">${minOptions(s)}</select><span class="wk-dash">–</span>
-    <select class="input wk-b-to">${minOptions(e)}</select>
-    <button class="icon-btn wk-b-del" type="button" title="Remove band">✕</button>
-  </div>`;
+const WDAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let WPAINT={};        // { "wd:startMin": {open,color,label} } — the whole week, edited by painting
+let WBRUSH=null, WSELECTING=false, WSEL_ANCHOR=null, WSEL_CUR=null;
+
+function weeklyGridHours(){ let lo=1e9,hi=-1e9; for(let wd=0;wd<7;wd++){ const h=(SETTINGS.hours||{})[wd]||[0,0]; if(h[1]>h[0]){ lo=Math.min(lo,h[0]); hi=Math.max(hi,h[1]); } } return hi>lo?[lo,hi]:null; }
+function buildWPaint(){
+  WPAINT={}; const step=SETTINGS.slot_step||30;
+  for(let wd=0;wd<7;wd++){ const h=(SETTINGS.hours||{})[wd]||[0,0]; if(!(h[1]>h[0])) continue;
+    for(let m=h[0]*60;m<h[1]*60;m+=step){ const st=weeklyStatusAt(wd,'*',m); if(st) WPAINT[wd+':'+m]={open:st.open,color:st.color,label:st.label}; } }
 }
-function wireBandDeletes(host){ host.querySelectorAll('.wk-b-del').forEach(b=>b.onclick=()=>b.closest('.wk-band').remove()); }
+function wCellStatus(wd,m){ const p=WPAINT[wd+':'+m]; return p ? { open:p.open, color:p.color||(p.open?STATUS_GREEN:STATUS_RED), label:p.label, painted:true } : { open:true, color:STATUS_GREEN, label:'', painted:false }; }
+function renderWeeklyGrid(){
+  const host=$('#weekly-grid'); if(!host) return;
+  const hrs=weeklyGridHours(); if(!hrs){ host.innerHTML='<div class="empty">Set your weekly hours above first.</div>'; return; }
+  const [lo,hi]=hrs, step=SETTINGS.slot_step||30;
+  let h='<table class="wkgrid"><thead><tr><th class="t"></th>';
+  for(let wd=0;wd<7;wd++) h+=`<th data-wd="${wd}">${WDAYS[wd]}</th>`;
+  h+='</tr></thead><tbody>';
+  for(let m=lo*60;m<hi*60;m+=step){
+    h+=`<tr><td class="t" data-min="${m}">${fmtMin(m)}</td>`;
+    for(let wd=0;wd<7;wd++){
+      const dh=(SETTINGS.hours||{})[wd]||[0,0];
+      if(!(dh[1]>dh[0]) || m<dh[0]*60 || m>=dh[1]*60){ h+='<td class="wkc off"></td>'; continue; }
+      const st=wCellStatus(wd,m), col=norm6(st.color);
+      // Plain "Open" stays quiet like the tee sheet; Closed / Prime / Happy Hour etc. stand out with a label.
+      const prom = !st.open || (st.label && !/^open$/i.test(st.label.trim()));
+      if(prom) h+=`<td class="wkc paint" data-wd="${wd}" data-min="${m}" style="--sc:${col};background:${col}22;border-color:${col};color:${readableOn(col)}">${st.label?`<span class="wl">${esc(st.label)}</span>`:''}</td>`;
+      else h+=`<td class="wkc" data-wd="${wd}" data-min="${m}" style="--sc:${col};background:${col}10;border-color:${col}30"></td>`;
+    }
+    h+='</tr>';
+  }
+  host.innerHTML=h+'</tbody></table>';
+}
+function setWBrush(b,btn){ WBRUSH=b; const bar=$('#wk-pal'); if(!bar) return; bar.querySelectorAll('.paint-sw').forEach(x=>x.classList.remove('on')); if(b&&btn) btn.classList.add('on'); document.body.classList.toggle('painting-w', !!b); document.body.style.setProperty('--wbrush', !b?'transparent':(b==='erase'?'#ff5b5b':norm6(b.color))); }
+function renderWeeklyPalette(){
+  const bar=$('#wk-pal'); if(!bar) return; const ss=scheduleStatuses();
+  bar.innerHTML=`<span class="paint-lead">Paint:</span>`
+    + ss.map((s,i)=>`<button class="paint-sw wk-sw" data-i="${i}" title="${esc(s.label)}"><span class="paint-dot" style="background:${norm6(s.color)}"></span>${esc(s.label)}</button>`).join('')
+    + `<button class="paint-sw wk-sw wk-erase"><span class="paint-dot paint-dot-x"></span>Erase</button>`;
+  bar.querySelectorAll('.wk-sw[data-i]').forEach(b=>b.onclick=()=>setWBrush(statusFieldsBrush(ss[+b.dataset.i]), b));
+  bar.querySelector('.wk-erase').onclick=e=>setWBrush('erase', e.currentTarget);
+  if(WBRUSH){ let btn=null; if(WBRUSH==='erase') btn=bar.querySelector('.wk-erase'); else { const i=ss.findIndex(s=>s.label===WBRUSH.label&&(s.color||'')===(WBRUSH.color||'')); if(i>=0) btn=bar.querySelector('.wk-sw[data-i="'+i+'"]'); } if(btn) btn.classList.add('on'); document.body.classList.add('painting-w'); document.body.style.setProperty('--wbrush', WBRUSH==='erase'?'#ff5b5b':norm6(WBRUSH.color)); }
+}
 function renderWeeklyStatusEditor(){
   const host=$('#weekly-status-editor'); if(!host) return;
   if(!scheduleStatuses().length){ host.innerHTML='<div class="empty">Add a schedule status first — see the Statuses tab.</div>'; return; }
-  const ws=(SETTINGS&&SETTINGS.weekly_status)||{};
-  host.innerHTML = DOW.map((d,wd)=>{
-    const bands=Array.isArray(ws[wd])?ws[wd]:(Array.isArray(ws[String(wd)])?ws[String(wd)]:[]);
-    const full=bands.find(b=>b.full), extra=bands.filter(b=>!b.full);
-    return `<div class="wk-row" data-wd="${wd}">
-      <div class="wk-day">${d}</div>
-      <div class="wk-def"><label>Default (all bays)</label><select class="input wk-default">${statusOptEls(full?full.statusId:defaultOpenStatusId())}</select></div>
-      <div class="wk-bandwrap"><div class="wk-bands">${extra.map(bandRowHTML).join('')}</div>
-        <button class="btn btn-ghost btn-sm wk-addband" type="button">+ Time band</button></div>
-    </div>`;
-  }).join('');
-  host.querySelectorAll('.wk-addband').forEach(btn=>btn.onclick=()=>{
-    btn.closest('.wk-row').querySelector('.wk-bands').insertAdjacentHTML('beforeend', bandRowHTML({}));
-    wireBandDeletes(host); syncSelects();
-  });
-  wireBandDeletes(host);
+  buildWPaint();
+  host.innerHTML=`<div class="paint-bar" id="wk-pal" style="margin-bottom:8px"></div>
+    <div class="paint-hint" style="display:block;margin:0 0 12px">Pick a colour, then drag across the days to paint the usual week · click a day name or a time to fill it · empty = Open. This repeats automatically every week.</div>
+    <div class="grid-scroll"><div id="weekly-grid"></div></div>`;
+  renderWeeklyPalette(); renderWeeklyGrid();
 }
+// Weekly-grid rectangle paint (delegated; the editor's innerHTML is rebuilt on each render).
+function wSelCells(){
+  if(!WSEL_ANCHOR||!WSEL_CUR) return [];
+  const w0=Math.min(WSEL_ANCHOR.wd,WSEL_CUR.wd), w1=Math.max(WSEL_ANCHOR.wd,WSEL_CUR.wd);
+  const m0=Math.min(WSEL_ANCHOR.m,WSEL_CUR.m), m1=Math.max(WSEL_ANCHOR.m,WSEL_CUR.m), step=SETTINGS.slot_step||30, cells=[];
+  for(let wd=w0;wd<=w1;wd++){ const dh=(SETTINGS.hours||{})[wd]||[0,0]; for(let m=m0;m<=m1;m+=step){ if(dh[1]>dh[0]&&m>=dh[0]*60&&m<dh[1]*60) cells.push({wd,m}); } }
+  return cells;
+}
+function wPaintKey(wd,m){ if(WBRUSH==='erase') delete WPAINT[wd+':'+m]; else WPAINT[wd+':'+m]={open:WBRUSH.open,color:WBRUSH.color,label:WBRUSH.label}; }
+function wShowSel(cells){ const g=$('#weekly-grid'); if(!g) return; g.querySelectorAll('.wsel').forEach(x=>x.classList.remove('wsel')); cells.forEach(({wd,m})=>{ const td=g.querySelector('.wkc[data-wd="'+wd+'"][data-min="'+m+'"]'); if(td) td.classList.add('wsel'); }); }
+function wClearSel(){ const g=$('#weekly-grid'); if(g) g.querySelectorAll('.wsel').forEach(x=>x.classList.remove('wsel')); }
+function wCommit(cells){ if(!cells.length) return; cells.forEach(({wd,m})=>wPaintKey(wd,m)); renderWeeklyGrid(); }
+function wFillColumn(wd){ const dh=(SETTINGS.hours||{})[wd]||[0,0]; if(!(dh[1]>dh[0])) return; const step=SETTINGS.slot_step||30; for(let m=dh[0]*60;m<dh[1]*60;m+=step) wPaintKey(wd,m); renderWeeklyGrid(); }
+function wFillRow(m){ for(let wd=0;wd<7;wd++){ const dh=(SETTINGS.hours||{})[wd]||[0,0]; if(dh[1]>dh[0]&&m>=dh[0]*60&&m<dh[1]*60) wPaintKey(wd,m); } renderWeeklyGrid(); }
+document.addEventListener('pointerdown', e=>{
+  if(!WBRUSH || !e.target.closest('#weekly-grid')) return;
+  const th=e.target.closest('th[data-wd]'); if(th){ e.preventDefault(); wFillColumn(+th.dataset.wd); return; }
+  const tt=e.target.closest('td.t[data-min]'); if(tt){ e.preventDefault(); wFillRow(+tt.dataset.min); return; }
+  const td=e.target.closest('td.wkc[data-min]'); if(!td) return;
+  e.preventDefault(); WSELECTING=true; WSEL_ANCHOR={wd:+td.dataset.wd,m:+td.dataset.min}; WSEL_CUR={wd:WSEL_ANCHOR.wd,m:WSEL_ANCHOR.m}; wShowSel(wSelCells());
+});
+document.addEventListener('pointermove', e=>{
+  if(!WSELECTING) return; const el=document.elementFromPoint(e.clientX,e.clientY); const td=el&&el.closest&&el.closest('td.wkc[data-min]');
+  if(td && $('#weekly-grid')&&$('#weekly-grid').contains(td)){ const nw=+td.dataset.wd,nm=+td.dataset.min; if(!WSEL_CUR||WSEL_CUR.wd!==nw||WSEL_CUR.m!==nm){ WSEL_CUR={wd:nw,m:nm}; wShowSel(wSelCells()); } }
+});
+document.addEventListener('pointerup', ()=>{ if(!WSELECTING) return; WSELECTING=false; const c=wSelCells(); wClearSel(); WSEL_ANCHOR=WSEL_CUR=null; wCommit(c); });
 async function saveWeeklyStatus(){
-  const byId=id=>scheduleStatuses().find(s=>String(s.id)===String(id));
+  const step=SETTINGS.slot_step||30, byDay={};
+  Object.keys(WPAINT).forEach(k=>{ const idx=k.indexOf(':'); const wd=+k.slice(0,idx), mm=+k.slice(idx+1); (byDay[wd] ||= []).push({m:mm,b:WPAINT[k]}); });
   const ws={};
-  document.querySelectorAll('#weekly-status-editor .wk-row').forEach(row=>{
-    const wd=row.dataset.wd, bands=[];
-    const def=byId(row.querySelector('.wk-default').value);
-    if(def) bands.push({ full:true, ...statusFields(def) });
-    row.querySelectorAll('.wk-band').forEach(bd=>{
-      const st=byId(bd.querySelector('.wk-b-status').value);
-      const from=+bd.querySelector('.wk-b-from').value, to=+bd.querySelector('.wk-b-to').value;
-      if(st && to>from) bands.push({ start:from, end:to, bays:[], ...statusFields(st) });
-    });
+  for(let wd=0;wd<7;wd++){
+    const arr=(byDay[wd]||[]).sort((a,c)=>a.m-c.m), bands=[]; let i=0;
+    while(i<arr.length){ let j=i; while(j+1<arr.length && arr[j+1].m===arr[j].m+step && sameBand(arr[j+1].b,arr[i].b)) j++;
+      const b=arr[i].b; bands.push({ start:arr[i].m, end:arr[j].m+step, bays:[], statusId:null, label:b.label||'', color:b.color||null, open:!!b.open }); i=j+1; }
     ws[wd]=bands;
-  });
+  }
   const btn=$('#save-weekly-status'); btn.disabled=true;
   const ok=await dbUpdate('settings',1,{weekly_status:ws,updated_at:new Date().toISOString()});
   btn.disabled=false;
