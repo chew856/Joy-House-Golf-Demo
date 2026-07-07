@@ -259,6 +259,11 @@
   .conf h3 { font-size: 22px; }
   .conf .code { font-family: 'Space Grotesk'; font-weight: 700; color: var(--green); letter-spacing: .05em; font-size: 18px; margin-top: 4px; }
   .conf-msg { color: var(--muted); font-size: 14.5px; line-height: 1.55; margin: 14px auto 0; max-width: 340px; }
+  .wv-cta { margin: 4px 0 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(240,82,61,.06); text-align: left; }
+  .wv-cta .wv-t { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .wv-cta .wv-s { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin-bottom: 12px; }
+  .btn.btn-line { background: transparent; border: 1px solid var(--orange); color: var(--orange); }
+  .btn.btn-line:hover { background: rgba(240,82,61,.12); }
   .conf .recap { text-align: left; background: var(--near-black); border: 1px solid var(--border);
     border-radius: 12px; padding: 16px; margin: 20px 0; }
   .conf .recap .row { display:flex; justify-content: space-between; padding: 7px 0; font-size: 14px; }
@@ -472,6 +477,7 @@
     <div class="code" id="conf-code"></div>
     <div class="conf-msg" id="conf-msg"></div>
     <div class="recap" id="conf-recap"></div>
+    <div id="conf-waiver"></div>
     <button class="btn btn-primary btn-block" id="conf-done">Done</button>
   </div>
 </div>
@@ -1057,6 +1063,19 @@ async function handleReturn(){
   history.replaceState({}, '', location.pathname);
 }
 
+// Post-booking prompt to sign the participant waiver (first visit only; it covers future visits).
+function fillWaiverCTA(email, name){
+  const host=$('#conf-waiver'); if(!host) return;
+  const p=new URLSearchParams();
+  if(email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) p.set('e', email.trim());
+  if(name && name!=='Guest') p.set('n', name);
+  const href='/waiver'+(p.toString()?('?'+p.toString()):'');
+  host.innerHTML=`<div class="wv-cta">
+    <div class="wv-t">One quick thing — sign your waiver</div>
+    <div class="wv-s">Required before your first visit. Takes about 30 seconds and it covers all your future bookings.</div>
+    <a class="btn btn-line btn-block" href="${href}" target="_blank" rel="noopener">Sign participant waiver</a>
+  </div>`;
+}
 function showStripeConfirmation(pi){
   holdActive=false; stopHoldTimer();   // hold is now a confirmed booking (flipped by the webhook)
   const code='JH-'+Math.abs([...pi.id].reduce((a,c)=>a*31+c.charCodeAt(0)|0,7)).toString(36).slice(0,6).toUpperCase();
@@ -1067,6 +1086,7 @@ function showStripeConfirmation(pi){
     <div class="row"><span class="k">Bay</span><span>${pi.metadata?.bayName||''}</span></div>
     <div class="row"><span class="k">When</span><span>${pi.metadata?.summary||''}</span></div>
     <div class="row"><span class="k">Paid</span><span>${money(pi.amount/100)}</span></div>`;
+  fillWaiverCTA($('#sc-email')?.value, ($('#sc-name')?.value||'').trim());
   $('#conf-overlay').classList.add('show');
   setStep(4);
 }
@@ -1087,6 +1107,7 @@ function showConfirmation(name){
     <div class="row"><span class="k">Time</span><span>${fmtFull(state.startMin)} – ${fmtFull(state.endMin)}</span></div>
     <div class="row"><span class="k">Group</span><span>${state.party} ${state.party>1?'players':'player'}</span></div>
     <div class="row"><span class="k">Paid</span><span>${money(price)}</span></div>`;
+  fillWaiverCTA($('#cust-email')?.value, name);
   $('#conf-overlay').classList.add('show');
   setStep(4);
 }

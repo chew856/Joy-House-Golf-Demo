@@ -9,6 +9,7 @@ import {
 } from './lib/booking.js';
 import { getSettings, getBookingsForDate, getOverridesForDate, insertBooking, dbEnabled, admin,
   createHold, releaseHold, confirmHold, cleanupExpiredHolds } from './lib/db.js';
+import signWaiver from './api/sign-waiver.js';
 
 // Local dev server. On Vercel the same logic runs as serverless functions in /api.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -72,10 +73,15 @@ app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, 
 
 app.use(express.json());
 
-// /admin → manager portal, /manage → customer self-service (before static so clean URLs work)
+// /admin → manager portal, /manage → customer self-service, /waiver → participant waiver
+// (before static so clean URLs work)
 app.get('/admin', (_req, res) => res.sendFile(path.join(__dirname, 'demo', 'admin.html')));
 app.get('/manage', (_req, res) => res.sendFile(path.join(__dirname, 'demo', 'manage.html')));
+app.get('/waiver', (_req, res) => res.sendFile(path.join(__dirname, 'demo', 'waiver.html')));
 app.use(express.static(path.join(__dirname, 'demo')));
+
+// Waiver signing (same handler the Vercel function uses).
+app.all('/api/sign-waiver', (req, res) => signWaiver(req, res));
 
 // Customer booking lookup + self-service cancellation (24-hour policy enforced server-side).
 app.get('/api/booking', async (req, res) => {

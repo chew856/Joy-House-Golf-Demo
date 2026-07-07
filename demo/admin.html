@@ -2539,6 +2539,12 @@ function matchCustomer(b){
   const email=(b.customer_email||'').trim().toLowerCase(), phone=(b.customer_phone||'').trim(), name=(b.customer_name||'').trim().toLowerCase();
   return CUSTOMERS.find(c=> (email&&c.email&&c.email.trim().toLowerCase()===email) || (phone&&c.phone&&c.phone.trim()===phone) || (name&&c.name&&c.name.trim().toLowerCase()===name) );
 }
+// Waiver status for the reservation sheet: green "Signed", the legacy code if imported, else amber "Not signed".
+function waiverStatusHTML(c){
+  if(c.waiver_signed_at) return `<span class="pill confirmed">Signed · ${shortDate(String(c.waiver_signed_at).slice(0,10))}</span>`;
+  if(c.waiver_code) return `<span class="wv-code">${esc(c.waiver_code)}</span>`;
+  return `<span class="pill" style="background:rgba(240,82,61,.12);color:#e0796f;border:1px solid rgba(240,82,61,.4)">Not signed</span>`;
+}
 
 function openManage(id){
   const b=BK.find(x=>x.id===id); if(!b) return;
@@ -2629,7 +2635,11 @@ function openManage(id){
     <div class="kv"><span class="k">Name</span><span>${esc(b.customer_name||'—')} <span class="rep hidden" id="m-rep"></span></span></div>
     ${(b.customer_phone||b.customer_email)?`<div class="kv"><span class="k">Contact</span><span>${esc(b.customer_phone||'')}${(b.customer_phone&&b.customer_email)?' · ':''}${esc(b.customer_email||'')}</span></div>`:''}
     ${(cust&&cust.membership_id)?`<div class="kv"><span class="k">Membership</span><span><span class="pill manager">${esc(planName(cust.membership_id))}</span>${(cust.membership_expires&&cust.membership_expires<todayLocalISO())?' <span class="exp expired">Expired '+shortDate2(cust.membership_expires)+'</span>':''}</span></div>`:''}
-    ${cust?`<div class="kv"><span class="k">Waiver</span><span>${cust.waiver_code?`<span class="wv-code">${esc(cust.waiver_code)}</span>`:'<span class="dim">Not on file</span>'}</span></div>`:''}
+    ${cust?`<div class="kv"><span class="k">Waiver</span><span id="m-wv-status">${waiverStatusHTML(cust)}</span></div>
+    <div class="row" style="gap:8px;margin:8px 0 2px;flex-wrap:nowrap">
+      <button class="btn btn-ghost btn-sm" id="m-wv-copy" style="flex:1">Copy waiver link</button>
+      ${cust.waiver_signed_at?'':`<button class="btn btn-ghost btn-sm" id="m-wv-mark" style="flex:1">Mark signed in person</button>`}
+    </div>`:''}
     ${(cust&&cust.notes)?`<div class="kv" style="border:none"><span class="k">Latest note</span><span style="text-align:right;max-width:220px">${esc(cust.notes)}</span></div>`:''}
 
     <div class="field" style="margin-top:16px"><label>Tags</label>
@@ -2646,6 +2656,13 @@ function openManage(id){
   $('#x').onclick=closeSheet;
   enhanceSelects(sheet);
   if($('#m-copy')) $('#m-copy').onclick=()=>{ const i=$('#m-link'); i.select(); navigator.clipboard&&navigator.clipboard.writeText(i.value); toast('Cancel link copied','ok'); };
+  if($('#m-wv-copy')) $('#m-wv-copy').onclick=()=>{ const link=`${location.origin}/waiver?c=${cust.id}`; navigator.clipboard&&navigator.clipboard.writeText(link); toast('Waiver link copied — text or email it to the customer','ok'); };
+  if($('#m-wv-mark')) $('#m-wv-mark').onclick=async()=>{
+    const btn=$('#m-wv-mark'); btn.disabled=true; btn.textContent='Saving…';
+    let r; try{ r=await (await fetch('/api/sign-waiver',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customerId:cust.id,name:cust.name||b.customer_name||'In person',version:'v2'})})).json(); }catch(e){ r={ok:false,error:'Network error'}; }
+    if(r&&r.ok){ cust.waiver_signed_at=r.signedAt; $('#m-wv-status').innerHTML=waiverStatusHTML(cust); btn.remove(); toast('Waiver marked signed','ok'); }
+    else { btn.disabled=false; btn.textContent='Mark signed in person'; toast((r&&r.error)||'Could not update','err'); }
+  };
   // Repeat-customer count (how many non-cancelled bookings this person has).
   (async()=>{
     const keys=[]; if(b.customer_email)keys.push('customer_email.ilike.'+b.customer_email.trim()); if(b.customer_phone)keys.push('customer_phone.eq.'+b.customer_phone.trim()); if(b.customer_name)keys.push('customer_name.ilike.'+b.customer_name.trim());
